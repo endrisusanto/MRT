@@ -1,0 +1,16 @@
+{
+  "name": "mrt-dashboard",
+  "version": "2.0.0",
+  "description": "Central Aggregation Web Dashboard for MRT Station Nodes",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0",
+    "cors": "^2.8.5"
+  }
+}

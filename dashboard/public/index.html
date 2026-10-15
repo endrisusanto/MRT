@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>MRT Central Dashboard - Samsung Station</title>
+
+  <!-- OpenGraph Metadata -->
+  <meta property="og:title" content="MRT Central Dashboard - Samsung Station">
+  <meta property="og:description" content="Central hub aggregating distributed desktop nodes and diagnostics for Samsung devices.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mrt.endrisusanto.my.id">
+  <meta property="og:image" content="https://mrt.endrisusanto.my.id/og-image.png">
+
+  <!-- CSS Design System -->
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/mobile.css">
+</head>
+<body>
+  <!-- Inline SVG Definition Symbols -->
+  <svg style="display: none;">
+    <symbol id="icon-server" viewBox="0 0 24 24">
+      <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+      <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+      <line x1="6" y1="6" x2="6.01" y2="6"></line>
+      <line x1="6" y1="18" x2="6.01" y2="18"></line>
+    </symbol>
+    <symbol id="icon-cpu" viewBox="0 0 24 24">
+      <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+      <rect x="9" y="9" width="6" height="6"></rect>
+      <line x1="9" y1="1" x2="9" y2="4"></line>
+      <line x1="15" y1="1" x2="15" y2="4"></line>
+      <line x1="9" y1="20" x2="9" y2="23"></line>
+      <line x1="15" y1="20" x2="15" y2="23"></line>
+      <line x1="20" y1="9" x2="23" y2="9"></line>
+      <line x1="20" y1="14" x2="23" y2="14"></line>
+      <line x1="1" y1="9" x2="4" y2="9"></line>
+      <line x1="1" y1="14" x2="4" y2="14"></line>
+    </symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24">
+      <polyline points="23 4 23 10 17 10"></polyline>
+      <polyline points="1 20 1 14 7 14"></polyline>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+    </symbol>
+    <symbol id="icon-usb" viewBox="0 0 24 24">
+      <circle cx="10" cy="4" r="2"></circle>
+      <circle cx="18" cy="8" r="2"></circle>
+      <circle cx="6" cy="16" r="2"></circle>
+      <path d="M12 2v20"></path>
+      <path d="M12 12h4a2 2 0 0 0 2-2V8"></path>
+      <path d="M12 16H8a2 2 0 0 1-2-2v-2"></path>
+    </symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+      <polyline points="7 10 12 15 17 10"></polyline>
+      <line x1="12" y1="15" x2="12" y2="3"></line>
+    </symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24">
+      <polyline points="3 6 5 6 21 6"></polyline>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+    </symbol>
+    <symbol id="icon-activity" viewBox="0 0 24 24">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+    </symbol>
+    <symbol id="icon-sun" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </symbol>
+    <symbol id="icon-moon" viewBox="0 0 24 24">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+    </symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    </symbol>
+  </svg>
+
+  <div class="app-shell">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand-section">
+        <svg class="icon" style="color: var(--color-blue); width: 18px; height: 18px;"><use href="#icon-cpu"></use></svg>
+        <h1 class="brand-title">MRT DASHBOARD</h1>
+        <span class="brand-badge">HUB v2.0</span>
+      </div>
+
+      <div class="header-actions">
+        <div class="tab-group" role="tablist" aria-label="Views">
+          <button class="tab-btn active" id="tab-devices" role="tab" aria-selected="true">Devices</button>
+          <button class="tab-btn" id="tab-nodes" role="tab" aria-selected="false">Nodes</button>
+        </div>
+        <button id="btn-refresh" class="btn btn-secondary" aria-label="Refresh Data">
+          <svg class="icon"><use href="#icon-refresh"></use></svg>
+          <span>Refresh</span>
+        </button>
+        <button id="btn-theme-toggle" class="btn-icon" aria-label="Toggle Color Theme" title="Toggle theme">
+          <svg id="theme-icon-dark" class="icon"><use href="#icon-sun"></use></svg>
+          <svg id="theme-icon-light" class="icon" style="display: none;"><use href="#icon-moon"></use></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Global Underline Progress Bar -->
+    <div class="underline-progress-bar" id="global-progress">
+      <div class="underline-progress-fill" id="global-progress-fill"></div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="app-main">
+      <div class="content-pane">
+        <!-- Aggregation Stat Bar -->
+        <div class="node-bar">
+          <div class="node-stat-card">
+            <span class="stat-label">Active Nodes</span>
+            <span class="stat-value font-mono" id="stat-active-nodes">0</span>
+            <span class="stat-sub">Discovered Agents</span>
+          </div>
+          <div class="node-stat-card">
+            <span class="stat-label">Total Devices</span>
+            <span class="stat-value" id="stat-total-devices">0</span>
+            <span class="stat-sub">Network Connected</span>
+          </div>
+          <div class="node-stat-card">
+            <span class="stat-label">System Mode</span>
+            <span class="stat-value font-mono" style="color: var(--color-blue);">Standalone Hub</span>
+            <span class="stat-sub font-mono">Port 3010 | Tunnel Ready</span>
+          </div>
+        </div>
+
+        <!-- View 1: Devices -->
+        <section id="view-devices">
+          <div class="section-header">
+            <h2 class="section-title">
+              <svg class="icon"><use href="#icon-usb"></use></svg>
+              <span>Network Devices</span>
+            </h2>
+            <span class="stat-sub" id="devices-status-sub">Live Updates</span>
+          </div>
+
+          <div class="device-grid" id="dashboard-devices-container" style="margin-top: var(--space-md);">
+            <!-- Populated via JS -->
+          </div>
+
+          <div class="empty-state" id="dashboard-devices-empty" style="display: none; margin-top: var(--space-md);">
+            <svg class="empty-icon"><use href="#icon-usb"></use></svg>
+            <div class="empty-title">No Devices Detected Across Nodes</div>
+            <div class="empty-desc">
+              Make sure MRT Station desktop agents are running on technician PCs and reporting to this hub.
+            </div>
+          </div>
+        </section>
+
+        <!-- View 2: Nodes -->
+        <section id="view-nodes" style="display: none;">
+          <div class="section-header">
+            <h2 class="section-title">
+              <svg class="icon"><use href="#icon-server"></use></svg>
+              <span>Registered Station Nodes</span>
+            </h2>
+            <span class="stat-sub" id="nodes-status-sub">Heartbeat Window: 30s</span>
+          </div>
+
+          <div class="node-grid" id="dashboard-nodes-container" style="margin-top: var(--space-md);">
+            <!-- Populated via JS -->
+          </div>
+
+          <div class="empty-state" id="dashboard-nodes-empty" style="display: none; margin-top: var(--space-md);">
+            <svg class="empty-icon"><use href="#icon-server"></use></svg>
+            <div class="empty-title">No Desktop Nodes Registered</div>
+            <div class="empty-desc">
+              Run the MRT Station desktop app on any workstation. It will automatically announce itself to this dashboard.
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- Mobile Bottom Navigation (< 768px) -->
+    <nav class="mobile-nav" aria-label="Mobile Navigation">
+      <button class="mobile-nav-item active" id="nav-item-devices" aria-label="Devices View">
+        <svg class="icon"><use href="#icon-usb"></use></svg>
+        <span>Devices</span>
+      </button>
+      <button class="mobile-nav-item" id="nav-item-nodes" aria-label="Nodes View">
+        <svg class="icon"><use href="#icon-server"></use></svg>
+        <span>Nodes</span>
+      </button>
+      <button class="mobile-nav-item" id="nav-item-refresh" aria-label="Refresh Data">
+        <svg class="icon"><use href="#icon-refresh"></use></svg>
+        <span>Refresh</span>
+      </button>
+    </nav>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toast-container" role="status" aria-live="polite"></div>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>
