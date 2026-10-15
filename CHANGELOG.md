@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.1.1] - 2026-10-16
+
+chore(release): bump version and publish artifacts
+
+
 All notable changes to MRT Station are documented in this file.
 
 ## [v2.1.0] - 2026-10-16
