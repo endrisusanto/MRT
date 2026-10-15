@@ -7,6 +7,20 @@ use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+/// Creates a Command with CREATE_NO_WINDOW (0x08000000) on Windows to suppress console/cmd window.
+pub fn silent_command(program: &str) -> Command {
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
+
 pub const SAMSUNG_VID: u16 = 0x04e8;
 pub const GOOGLE_VID: u16 = 0x18d1;
 
@@ -36,7 +50,7 @@ pub fn try_auto_enable_modem(serial: &str) {
             let s = serial.to_string();
             let p_str = p.to_string();
             std::thread::spawn(move || {
-                let _ = Command::new("python3").args([&p_str, &s]).output();
+                let _ = silent_command("python3").args([&p_str, &s]).output();
             });
             break;
         }
@@ -68,7 +82,7 @@ pub fn get_serial_by_id_map() -> HashMap<String, String> {
 
 pub fn get_adb_models_map() -> HashMap<String, String> {
     let mut map = HashMap::new();
-    if let Ok(output) = Command::new("adb").args(["devices", "-l"]).output() {
+    if let Ok(output) = silent_command("adb").args(["devices", "-l"]).output() {
         if let Ok(text) = String::from_utf8(output.stdout) {
             for line in text.lines() {
                 let trimmed = line.trim();

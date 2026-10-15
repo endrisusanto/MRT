@@ -39,7 +39,7 @@ fn get_node_info(state: tauri::State<'_, AppStateWrapper>) -> NodeInfo {
         ip_address: ip,
         port: 7890,
         os: std::env::consts::OS.to_string(),
-        version: "2.0.0".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
         device_count,
         uptime_seconds: uptime,
     }
