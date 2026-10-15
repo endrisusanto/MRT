@@ -25,6 +25,20 @@ pub const SAMSUNG_VID: u16 = 0x04e8;
 pub const GOOGLE_VID: u16 = 0x18d1;
 
 static LAST_AUTO_ENABLE: Mutex<Option<HashMap<String, Instant>>> = Mutex::new(None);
+static HARDWARE_TOKEN_CACHE: Mutex<Option<HashMap<String, (Instant, Option<token_engine::ParsedTokenInfo>)>>> = Mutex::new(None);
+
+pub fn cached_query_device_token(port: &str) -> Option<token_engine::ParsedTokenInfo> {
+    let mut lock = HARDWARE_TOKEN_CACHE.lock().unwrap();
+    let cache = lock.get_or_insert_with(HashMap::new);
+    if let Some((instant, res)) = cache.get(port) {
+        if instant.elapsed() < Duration::from_secs(12) {
+            return res.clone();
+        }
+    }
+    let res = token_engine::query_device_token(port);
+    cache.insert(port.to_string(), (Instant::now(), res.clone()));
+    res
+}
 
 /// ponytail: Automatically triggers USBSettings MTP+ADB to expose /dev/ttyACM* modem port
 pub fn try_auto_enable_modem(serial: &str) {
@@ -274,7 +288,7 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
 
         let mut hardware_token = None;
         if let Some(port) = &dev.port_name {
-            hardware_token = token_engine::query_device_token(port);
+            hardware_token = cached_query_device_token(port);
         }
 
         if let Some(tok_info) = hardware_token {

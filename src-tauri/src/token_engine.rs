@@ -88,11 +88,11 @@ pub fn send_at(port_path: &str, cmd: &str, timeout_ms: u64) -> Result<String, St
 }
 
 pub fn query_device_token(port_path: &str) -> Option<ParsedTokenInfo> {
-    let res9 = send_at(port_path, "AT+ENGMODES=9,0", 400).ok()?;
+    let res9 = send_at(port_path, "AT+ENGMODES=9,0", 700).ok()?;
     if !res9.contains("+ENGMODES:9,OK,") {
         return None;
     }
-    let res1 = send_at(port_path, "AT+ENGMODES=1,1,0", 300).ok();
+    let res1 = send_at(port_path, "AT+ENGMODES=1,1,0", 500).ok();
     parse_engmodes_info(&res9, res1.as_deref())
 }
 
