@@ -84,9 +84,9 @@ button:disabled {
 }
 
 .brand-title {
-  font-size: var(--text-md);
-  font-weight: 700;
-  letter-spacing: 0.5px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--color-text-primary);
 }
 

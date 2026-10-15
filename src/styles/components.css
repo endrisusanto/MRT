@@ -1063,7 +1063,8 @@
   }
 
   .brand-title {
-    font-size: 0.95rem !important;
+    font-size: 1.15rem !important;
+    font-weight: 800 !important;
     white-space: nowrap;
   }
 
