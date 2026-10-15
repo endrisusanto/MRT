@@ -41,6 +41,13 @@ mkdir -p "${STAGE_DIR}/usr/share/icons/hicolor/32x32/apps"
 cp "${ROOT_DIR}/src-tauri/target/release/mrt-station" "${STAGE_DIR}/usr/bin/mrt-station"
 chmod +x "${STAGE_DIR}/usr/bin/mrt-station"
 
+# 1b. Copy helper scripts (auto enable modem)
+mkdir -p "${STAGE_DIR}/usr/lib/mrt-station/scripts"
+if [ -f "${ROOT_DIR}/scripts/enable_modem.py" ]; then
+    cp "${ROOT_DIR}/scripts/enable_modem.py" "${STAGE_DIR}/usr/lib/mrt-station/scripts/enable_modem.py"
+    chmod +x "${STAGE_DIR}/usr/lib/mrt-station/scripts/enable_modem.py"
+fi
+
 # 2. Copy App Icons
 if [ -f "${ROOT_DIR}/src-tauri/icons/icon.png" ]; then
     cp "${ROOT_DIR}/src-tauri/icons/icon.png" "${STAGE_DIR}/usr/share/icons/hicolor/512x512/apps/mrt-station.png"

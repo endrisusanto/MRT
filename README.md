@@ -31,30 +31,33 @@ Modernized Samsung EM Station distributed diagnostics system built with **Rust /
              +-----------------+                     +-----------------+
 ```
 
-### Components
+### Key Components & Capabilities
 
 1. **Tauri Desktop App (Node Agent)**
-   - Runs locally on technician workstations.
-   - Minimizes to system tray when the window is closed (`CloseRequested` event intercepted).
-   - Scans connected Samsung/Android devices via `rusb` and `serialport`.
-   - Exposes an embedded local HTTP/WebSocket API on port `7890`.
-   - Sends background heartbeats to the Central Dashboard.
-   - Single Sign-On (SSO) has been completely eliminated for seamless offline / Debian / Ubuntu / Windows usage.
+   - Runs locally on technician workstations with tray minimization (`CloseRequested` intercepted).
+   - Scans connected Samsung devices via `rusb`, udev `/dev/serial/by-id` symlinks, and ADB.
+   - **Auto-Enable Modem Port**: Automatically detects devices in ADB-only mode and triggers Samsung `USBSettings` (`*#0808#` via dynamic UI hierarchy parsing) to expose composite `MTP+ADB` with `/dev/ttyACM*` modem interface.
+   - **Hardware & Local Token Engine**: Validates active cryptographic tokens directly against device modem hardware (`AT+ENGMODES=9,0`) and local secure store (`~/.mrt-station/tokens.json`).
+   - Exposes an embedded local Axum HTTP/WebSocket API on port `7890`.
 
 2. **Central Web Dashboard**
    - Packaged as a lightweight Docker container on port `3010`.
-   - Proxied via Cloudflare Tunnel (`mrt.endrisusanto.my.id`).
-   - Discovers and aggregates multiple distributed station nodes.
-   - Provides real-time device status and remote operation dispatching via WebSocket.
+   - Aggregates multi-node fleet inventory in real-time.
+   - **Octopus-styled Progress Tracking**: In-row background fill tint (`rgba(56, 189, 248, 0.18)`), 3px bottom accent line, and right-aligned metric label (`${step}: ${pct}%`) directly on device rows.
+   - **Modern Technical UI**: Extra Large commanding accordion headers, token status badges with icon state, and mobile-optimized compact counters.
+   - **Global Live Terminal**: Real-time AT command streaming drawer for tracking fleet operations.
+
+---
 
 ## Design System & Accessibility
 
 - **Font**: SamsungOne corporate typography via CDN (`https://fonts.cdnfonts.com/css/samsungone`). Monospace data in JetBrains Mono.
-- **Type Scale**: Compact technical scale (10px to 18px).
-- **Themes**: High-contrast Dark (default) and Light modes with WCAG AA compliance (contrast ratios > 16:1).
-- **Icons**: Clean inline SVG symbols with zero emojis anywhere in the codebase.
-- **Progress Indicators**: Circular SVG ring progress (battery/device level) and filled underline progress bar (operations).
-- **Responsiveness**: Multi-breakpoint layout (<480px, 480-768px, >768px) with bottom navigation on mobile.
+- **Themes**: High-contrast Dark (default) and Light modes with solid surface headers and WCAG AA compliance.
+- **Icons**: Clean inline SVG symbols with zero emojis.
+- **Progress Fill**: Octopus in-row dual-layer progress bar and fill.
+- **Responsiveness**: Multi-breakpoint responsive layout with compact mobile badges (hiding suffix labels on mobile).
+
+---
 
 ## Quick Start
 
@@ -62,7 +65,7 @@ Modernized Samsung EM Station distributed diagnostics system built with **Rust /
 
 ```bash
 # Build and start via docker-compose on port 3010
-docker compose up -d
+docker compose up -d --build
 ```
 
 Access the dashboard at `http://localhost:3010` or through your Cloudflare tunnel at `https://mrt.endrisusanto.my.id`.
@@ -76,9 +79,11 @@ npm install
 # Run in development mode (spawns desktop app and node API on port 7890)
 npm run dev
 
-# Or build release bundle (.msi / .deb / .AppImage)
-npm run build
+# Or build native Debian package
+./build-deb.sh --install
 ```
+
+---
 
 ## API Reference (Node Agent - Port 7890)
 
@@ -86,15 +91,36 @@ npm run build
 |---|---|---|
 | `GET` | `/health` | Health check and agent version |
 | `GET` | `/info` | Node metadata, IP, OS, and uptime |
-| `GET` | `/devices` | List connected Samsung/Android devices |
-| `POST` | `/devices/:serial/install` | Install Samsung agent on target device |
+| `GET` | `/devices` | List connected Samsung devices with verified tokens and modem ports |
+| `POST` | `/devices/:serial/install` | Install 4 standalone EM modes (`0`, `1`, `12`, `49`) |
+| `POST` | `/devices/:serial/remove-token` | Remove active token offline via modem command `AT+ENGMODES=0,0,3,0` |
 | `POST` | `/devices/:serial/uninstall` | Uninstall Samsung agent from target device |
 | `POST` | `/devices/:serial/recover` | Run diagnostics recovery on target device |
 | `WS` | `/ws` | Real-time WebSocket event stream |
 
-## GitHub Actions CI/CD
+---
 
-Automated multiplatform builds are configured in `.github/workflows/build-all.yml`:
-- Windows: generates `.msi` and `.exe` installers.
-- Linux: generates `.deb` and `.AppImage` packages.
-- Docker: builds production dashboard image.
+## Supported Standalone EM Modes
+
+| Index | Mode Name | Description |
+|---|---|---|
+| `0` | `MODE_ENG_KERNEL` | Eng Kernel Execution Mode (Root & Selinux Permissive) |
+| `1` | `MODE_INIT_EM` | Master EM Subsystem Initializer & Security State Override |
+| `12` | `MODE_ACCESS_SOD` | Secure Operations & Debugger Access Interface |
+| `49` | `MODE_EXTRACT_RAM_DUMP` | Physical RAM Dump Extraction directly via modem interface |
+
+---
+
+## Release Pipeline
+
+MRT Station includes an automated release pipeline in [`release.sh`](./release.sh):
+
+```bash
+# Release a patch version
+./release.sh patch "Fix device bridge auto-reconnect"
+
+# Release a minor version with custom changelog message
+./release.sh minor "Add auto-enable modem port and Octopus in-row progress"
+```
+
+The script increments versions across `Cargo.toml`, `package.json`, and `tauri.conf.json`, compiles and tests the `.deb` package, tags the commit with release notes, updates `CHANGELOG.md`, and triggers multiplatform GitHub Actions builds.

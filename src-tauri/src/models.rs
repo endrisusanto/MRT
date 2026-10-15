@@ -11,6 +11,18 @@ pub struct DeviceInfo {
     pub battery_level: Option<u8>,
     pub port_name: Option<String>,
     pub last_seen: String,
+    pub token_status: Option<String>,   // "ACTIVE", "EXPIRED", "NONE"
+    pub token_owner: Option<String>,    // e.g. "endri.s"
+    pub token_expires: Option<String>,  // e.g. "2026-11-28"
+    pub active_modes: Vec<String>,      // e.g. ["MODE_ENG_KERNEL", "MODE_INIT_EM", "MODE_ACCESS_SOD", "MODE_EXTRACT_RAM_DUMP"]
+    pub mode_quotas: Vec<ModeQuota>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModeQuota {
+    pub index: i32,
+    pub name: String,
+    pub tuc: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

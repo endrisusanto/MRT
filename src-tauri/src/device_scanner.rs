@@ -1,12 +1,100 @@
 use crate::models::DeviceInfo;
+use crate::token_engine;
 use chrono::Utc;
-use std::time::Duration;
+use std::collections::HashMap;
+use std::path::Path;
+use std::process::Command;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 pub const SAMSUNG_VID: u16 = 0x04e8;
 pub const GOOGLE_VID: u16 = 0x18d1;
 
+static LAST_AUTO_ENABLE: Mutex<Option<HashMap<String, Instant>>> = Mutex::new(None);
+
+/// ponytail: Automatically triggers USBSettings MTP+ADB to expose /dev/ttyACM* modem port
+pub fn try_auto_enable_modem(serial: &str) {
+    if serial.is_empty() || serial == "unauthorized" {
+        return;
+    }
+    let mut lock = LAST_AUTO_ENABLE.lock().unwrap();
+    let map = lock.get_or_insert_with(HashMap::new);
+    if let Some(last) = map.get(serial) {
+        if last.elapsed() < Duration::from_secs(60) {
+            return;
+        }
+    }
+    map.insert(serial.to_string(), Instant::now());
+
+    let script_paths = [
+        "/usr/lib/mrt-station/scripts/enable_modem.py",
+        "/home/endri-pro/Videos/MRT/scripts/enable_modem.py",
+        "scripts/enable_modem.py",
+    ];
+    for p in script_paths {
+        if Path::new(p).exists() {
+            let s = serial.to_string();
+            let p_str = p.to_string();
+            std::thread::spawn(move || {
+                let _ = Command::new("python3").args([&p_str, &s]).output();
+            });
+            break;
+        }
+    }
+}
+
+pub fn get_serial_by_id_map() -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    let by_id = Path::new("/dev/serial/by-id");
+    if let Ok(entries) = std::fs::read_dir(by_id) {
+        for entry in entries.flatten() {
+            let filename = entry.file_name().to_string_lossy().to_string();
+            // Expected format: usb-SAMSUNG_SAMSUNG_Android_<SERIAL>-if01
+            if filename.contains("SAMSUNG") && filename.contains("-if01") {
+                if let Some(pos) = filename.find("Android_") {
+                    let sub = &filename[pos + 8..];
+                    if let Some(end) = sub.find("-if01") {
+                        let serial = &sub[..end];
+                        if let Ok(target) = std::fs::canonicalize(entry.path()) {
+                            map.insert(serial.to_string(), target.to_string_lossy().to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    map
+}
+
+pub fn get_adb_models_map() -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    if let Ok(output) = Command::new("adb").args(["devices", "-l"]).output() {
+        if let Ok(text) = String::from_utf8(output.stdout) {
+            for line in text.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.starts_with("List of") {
+                    continue;
+                }
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if let Some(serial) = parts.first() {
+                    for p in &parts[1..] {
+                        if let Some(model_part) = p.strip_prefix("model:") {
+                            let model = model_part.replace('_', "-");
+                            map.insert(serial.to_string(), model);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    map
+}
+
 pub fn scan_devices() -> Vec<DeviceInfo> {
     let mut devices = Vec::new();
+    let ports_map = get_serial_by_id_map();
+    let adb_models = get_adb_models_map();
 
     // 1. Scan USB devices via rusb
     if let Ok(usb_devices) = rusb::devices() {
@@ -26,7 +114,7 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
                         "Android Diagnostic Device".to_string()
                     };
 
-                    // Try to read string descriptors if device handle can be opened
+                    // Try to read string descriptors
                     if let Ok(handle) = device.open() {
                         let timeout = Duration::from_millis(150);
                         if let Ok(languages) = handle.read_languages(timeout) {
@@ -46,54 +134,167 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
                         }
                     }
 
+                    // Filter out non-mobile devices (SSD, storage, hubs)
+                    let is_non_mobile = model_str.contains("PSSD")
+                        || model_str.contains("SSD")
+                        || model_str.contains("Flash")
+                        || model_str.contains("Storage")
+                        || model_str.contains("Mass")
+                        || model_str.contains("Hub");
+                    if is_non_mobile {
+                        continue;
+                    }
+
+                    // Match true Samsung model from ADB if available
+                    if let Some(real_model) = adb_models.get(&serial_str) {
+                        model_str = real_model.clone();
+                    }
+
+                    // Match modem port from /dev/serial/by-id/
+                    let port_name = ports_map.get(&serial_str).cloned();
+                    if port_name.is_none() {
+                        try_auto_enable_modem(&serial_str);
+                    }
+                    let conn_type = if port_name.is_some() {
+                        "USB+Modem".to_string()
+                    } else {
+                        "USB".to_string()
+                    };
+
                     devices.push(DeviceInfo {
                         serial: serial_str,
                         model: model_str,
                         vendor_id: vid,
                         product_id: pid,
-                        connection_type: "USB".to_string(),
-                        agent_status: "INSTALLED".to_string(),
+                        connection_type: conn_type,
+                        agent_status: "STANDBY".to_string(),
                         battery_level: Some(85),
-                        port_name: None,
+                        port_name,
                         last_seen: Utc::now().to_rfc3339(),
+                        token_status: None,
+                        token_owner: None,
+                        token_expires: None,
+                        active_modes: Vec::new(),
+                        mode_quotas: Vec::new(),
                     });
                 }
             }
         }
     }
 
-    // 2. Scan serial ports via serialport
+    // 2. Also register any ADB devices not captured by rusb
+    for (serial, model) in &adb_models {
+        if !devices.iter().any(|d| d.serial == *serial) {
+            let port_name = ports_map.get(serial).cloned();
+            if port_name.is_none() {
+                try_auto_enable_modem(serial);
+            }
+            let conn_type = if port_name.is_some() {
+                "USB+Modem".to_string()
+            } else {
+                "ADB".to_string()
+            };
+            devices.push(DeviceInfo {
+                serial: serial.clone(),
+                model: model.clone(),
+                vendor_id: SAMSUNG_VID,
+                product_id: 0x6860,
+                connection_type: conn_type,
+                agent_status: "STANDBY".to_string(),
+                battery_level: Some(85),
+                port_name,
+                last_seen: Utc::now().to_rfc3339(),
+                token_status: None,
+                token_owner: None,
+                token_expires: None,
+                active_modes: Vec::new(),
+                mode_quotas: Vec::new(),
+            });
+        }
+    }
+
+    // 3. Fallback scan serial ports via serialport if port_name still missing
     if let Ok(ports) = serialport::available_ports() {
         for p in ports {
-            match p.port_type {
-                serialport::SerialPortType::UsbPort(info) => {
-                    let vid = info.vid;
-                    let pid = info.pid;
-                    let is_target = vid == SAMSUNG_VID || vid == GOOGLE_VID;
-                    if is_target {
-                        let serial_str = info.serial_number.unwrap_or_else(|| p.port_name.clone());
-                        let model_str = info.product.unwrap_or_else(|| "Samsung Diagnostic Port".to_string());
-
-                        // Deduplicate if already found via rusb
-                        if !devices.iter().any(|d| d.serial == serial_str || d.port_name.as_deref() == Some(&p.port_name)) {
-                            devices.push(DeviceInfo {
-                                serial: serial_str,
-                                model: model_str,
-                                vendor_id: vid,
-                                product_id: pid,
-                                connection_type: "Serial".to_string(),
-                                agent_status: "INSTALLED".to_string(),
-                                battery_level: None,
-                                port_name: Some(p.port_name),
-                                last_seen: Utc::now().to_rfc3339(),
-                            });
-                        }
-                    }
+            if let serialport::SerialPortType::UsbPort(info) = p.port_type {
+                if (info.vid == SAMSUNG_VID || info.vid == GOOGLE_VID) && !devices.iter().any(|d| d.port_name.as_deref() == Some(&p.port_name)) {
+                    let serial_str = info.serial_number.clone().unwrap_or_else(|| p.port_name.clone());
+                    let model_str = adb_models.get(&serial_str).cloned().unwrap_or_else(|| "Samsung Mobile Device".to_string());
+                    devices.push(DeviceInfo {
+                        serial: serial_str,
+                        model: model_str,
+                        vendor_id: info.vid,
+                        product_id: info.pid,
+                        connection_type: "Modem".to_string(),
+                        agent_status: "STANDBY".to_string(),
+                        battery_level: None,
+                        port_name: Some(p.port_name.clone()),
+                        last_seen: Utc::now().to_rfc3339(),
+                        token_status: None,
+                        token_owner: None,
+                        token_expires: None,
+                        active_modes: Vec::new(),
+                        mode_quotas: Vec::new(),
+                    });
                 }
-                _ => {}
             }
         }
     }
 
+    // 4. Enrich devices with token info
+    let stored_tokens = token_engine::load_token_store();
+
+    for dev in devices.iter_mut() {
+        if let Some(stored) = stored_tokens.get(&dev.serial) {
+            dev.token_status = Some(stored.status.clone());
+            dev.token_owner = Some(stored.owner.clone());
+            dev.token_expires = Some(stored.expires.clone());
+            dev.active_modes = stored.active_modes.clone();
+            dev.mode_quotas = stored.quotas.clone();
+            dev.agent_status = "INSTALLED".to_string();
+            if dev.model.is_empty() || dev.model.contains("Android") {
+                dev.model = stored.model.clone();
+            }
+            continue;
+        }
+
+        let mut hardware_token = None;
+        if let Some(port) = &dev.port_name {
+            hardware_token = token_engine::query_device_token(port);
+        }
+
+        if let Some(tok_info) = hardware_token {
+            dev.token_status = Some(tok_info.status);
+            dev.token_owner = tok_info.owner;
+            dev.token_expires = tok_info.expires;
+            dev.active_modes = tok_info.active_modes;
+            dev.mode_quotas = tok_info.quotas;
+            dev.agent_status = "INSTALLED".to_string();
+            if let Some(m) = tok_info.model {
+                dev.model = m;
+            }
+        } else {
+            dev.token_status = Some("NONE".to_string());
+            dev.agent_status = "NOT_INSTALLED".to_string();
+        }
+    }
+
     devices
+}
+
+pub fn find_port_for_serial(serial: &str) -> Option<String> {
+    let map = get_serial_by_id_map();
+    if let Some(port) = map.get(serial) {
+        return Some(port.clone());
+    }
+    if let Ok(ports) = serialport::available_ports() {
+        for p in ports {
+            if let serialport::SerialPortType::UsbPort(info) = p.port_type {
+                if info.serial_number.as_deref() == Some(serial) {
+                    return Some(p.port_name);
+                }
+            }
+        }
+    }
+    None
 }

@@ -1,10 +1,21 @@
 @import url('https://fonts.cdnfonts.com/css/samsungone');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Typography */
-  --font-brand: 'SamsungOne', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  /* Modern Sans & Proportional Monospace Fonts */
+  --font-brand: 'Plus Jakarta Sans', 'SamsungOne', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'SamsungOne', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
+  /* Transitions & Motion (Emil Kowalski Timing) */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-fast: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-slow: 350ms;
+  --transition-fast: 150ms ease;
+
+  /* Typography scale */
   --text-2xs: 10px;
   --text-xs: 11px;
   --text-sm: 12px;
@@ -12,10 +23,6 @@
   --text-md: 14px;
   --text-lg: 16px;
   --text-xl: 18px;
-
-  --leading-tight: 1.25;
-  --leading-normal: 1.45;
-  --leading-relaxed: 1.6;
 
   /* Spacing */
   --space-2xs: 2px;
@@ -26,76 +33,152 @@
   --space-xl: 20px;
   --space-2xl: 24px;
 
-  /* Geometry */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  /* Border Radii (Better UI concentric design) */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
   --radius-full: 9999px;
-
-  /* Shared Accents (WCAG AA compliant) */
-  --color-blue: #3B82F6;
-  --color-blue-hover: #2563EB;
-  --color-green: #22C55E;
-  --color-green-hover: #16A34A;
-  --color-amber: #F59E0B;
-  --color-red: #EF4444;
-  --color-red-hover: #DC2626;
-  --color-cyan: #06B6D4;
-  --color-purple: #8B5CF6;
-
-  /* Focus ring */
-  --focus-ring: 2px solid var(--color-blue);
-  --focus-offset: 2px;
-  --transition-fast: 150ms ease;
 }
 
-/* Dark Theme (Default) */
+/* Light Theme Tokens */
+[data-theme="light"] {
+  --bg-base: #f6f8fa;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f0f2f5;
+  --bg-hover: #e9ecef;
+  --bg-active: #dee2e6;
+  --bg-elevated: #ffffff;
+
+  /* ponytail: ensure solid navbar and background colors in lightmode */
+  --color-bg-base: #f6f8fa;
+  --color-bg-surface: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-bg-subtle: #f0f2f5;
+
+  --border-subtle: #d0d7de;
+  --border-medium: #afb8c1;
+  --border-strong: #8c959f;
+  --border-active: #0969da;
+  --color-border: #d0d7de;
+  --color-border-hover: #afb8c1;
+
+  --text-primary: #1f2328;
+  --text-secondary: #57606a;
+  --text-muted: #8c959f;
+  --color-text-primary: #1f2328;
+  --color-text-secondary: #57606a;
+  --color-text-muted: #8c959f;
+
+  /* Solid Status Colors */
+  --status-ready-text: #1a7f37;
+  --status-ready-bg: #dafbe1;
+  --status-ready-border: #4ac26b;
+
+  --status-flashing-text: #9a6700;
+  --status-flashing-bg: #fff8c5;
+  --status-flashing-border: #d4a72c;
+
+  --status-pass-text: #0969da;
+  --status-pass-bg: #ddf4ff;
+  --status-pass-border: #54aeff;
+
+  --status-fail-text: #cf222e;
+  --status-fail-bg: #ffebe9;
+  --status-fail-border: #ff8182;
+
+  --status-offline-text: #57606a;
+  --status-offline-bg: #eaeef2;
+  --status-offline-border: #afb8c1;
+
+  --badge-pc-bg: #eef2f6;
+  --badge-pc-text: #24292f;
+  --badge-pc-border: #cfd6df;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+
+  /* Primary Brand / Accent */
+  --accent-primary: #0969da;
+  --accent-hover: #0858b8;
+  --accent-subtle: #ddf4ff;
+  --accent-border: #54aeff;
+  --accent-text: #0969da;
+
+  --color-blue: #0969da;
+  --color-blue-hover: #0858b8;
+  --color-green: #1a7f37;
+  --color-amber: #9a6700;
+  --color-red: #cf222e;
+}
+
+/* Dark Theme Tokens (Default Octopus Style) */
 [data-theme="dark"],
 :root:not([data-theme="light"]) {
-  --color-bg-base: #0B0F19;
-  --color-bg-surface: #141924;
-  --color-bg-elevated: #1E2536;
-  --color-bg-subtle: #182030;
+  --bg-base: #0d1117;
+  --bg-surface: #161b22;
+  --bg-subtle: #21262d;
+  --bg-hover: #30363d;
+  --bg-active: #3b434d;
+  --bg-elevated: #161b22;
 
-  --color-text-primary: #F0F4F8;
-  --color-text-secondary: #94A3B8;
-  --color-text-muted: #64748B;
+  --color-bg-base: #0d1117;
+  --color-bg-surface: #161b22;
+  --color-bg-elevated: #21262d;
+  --color-bg-subtle: #1c2128;
 
-  --color-border: #1E293B;
-  --color-border-hover: #334155;
-  --color-border-focus: #3B82F6;
+  --border-subtle: #30363d;
+  --border-medium: #484f58;
+  --border-strong: #6e7681;
+  --border-active: #58a6ff;
+  --color-border: #30363d;
+  --color-border-hover: #484f58;
 
-  --badge-bg-installed: rgba(34, 197, 94, 0.15);
-  --badge-text-installed: #4ADE80;
-  --badge-bg-missing: rgba(239, 68, 68, 0.15);
-  --badge-text-missing: #F87171;
-  --badge-bg-updating: rgba(245, 158, 11, 0.15);
-  --badge-text-updating: #FBBF24;
+  --text-primary: #f0f6fc;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --color-text-primary: #f0f6fc;
+  --color-text-secondary: #8b949e;
+  --color-text-muted: #6e7681;
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
-}
+  /* Solid Status Colors */
+  --status-ready-text: #3fb950;
+  --status-ready-bg: #122619;
+  --status-ready-border: #238636;
 
-/* Light Theme */
-[data-theme="light"] {
-  --color-bg-base: #FFFFFF;
-  --color-bg-surface: #F1F5F9;
-  --color-bg-elevated: #E2E8F0;
-  --color-bg-subtle: #F8FAFC;
+  --status-flashing-text: #d29922;
+  --status-flashing-bg: #2b2011;
+  --status-flashing-border: #9e6a03;
 
-  --color-text-primary: #0F172A;
-  --color-text-secondary: #475569;
-  --color-text-muted: #64748B;
+  --status-pass-text: #58a6ff;
+  --status-pass-bg: #112338;
+  --status-pass-border: #1f6feb;
 
-  --color-border: #CBD5E1;
-  --color-border-hover: #94A3B8;
-  --color-border-focus: #2563EB;
+  --status-fail-text: #f85149;
+  --status-fail-bg: #2c1418;
+  --status-fail-border: #da3633;
 
-  --badge-bg-installed: #DCFCE7;
-  --badge-text-installed: #15803D;
-  --badge-bg-missing: #FEE2E2;
-  --badge-text-missing: #B91C1C;
-  --badge-bg-updating: #FEF3C7;
-  --badge-text-updating: #B45309;
+  --status-offline-text: #8b949e;
+  --status-offline-bg: #1c2128;
+  --status-offline-border: #373e47;
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --badge-pc-bg: #1f242c;
+  --badge-pc-text: #e6edf3;
+  --badge-pc-border: #3d444d;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5);
+
+  /* Primary Brand / Accent */
+  --accent-primary: #2f81f7;
+  --accent-hover: #58a6ff;
+  --accent-subtle: #112338;
+  --accent-border: #388bfd;
+  --accent-text: #58a6ff;
+
+  --color-blue: #2f81f7;
+  --color-blue-hover: #58a6ff;
+  --color-green: #3fb950;
+  --color-amber: #d29922;
+  --color-red: #f85149;
 }

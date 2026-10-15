@@ -97,6 +97,31 @@ sed -i -E "0,/\"version\": \"[0-9]+\.[0-9]+\.[0-9]+\"/s/\"version\": \"[0-9]+\.[
 chmod +x ./build-deb.sh
 ./build-deb.sh
 
+# Update CHANGELOG.md
+TODAY="$(date +'%Y-%m-%d')"
+CHANGELOG_ENTRY="## [$NEXT_TAG] - $TODAY
+
+$COMMIT_MESSAGE"
+
+if [ -f "CHANGELOG.md" ]; then
+  # Prepend new entry after title if exists
+  if grep -q "# Changelog" CHANGELOG.md; then
+    TEMP_CL="$(mktemp)"
+    awk -v entry="$CHANGELOG_ENTRY" 'NR==1{print; print ""; print entry; print ""; next} 1' CHANGELOG.md > "$TEMP_CL"
+    mv "$TEMP_CL" CHANGELOG.md
+  else
+    printf '%s\n\n%s\n' "$CHANGELOG_ENTRY" "$(cat CHANGELOG.md)" > CHANGELOG.md
+  fi
+else
+  cat <<EOF > CHANGELOG.md
+# Changelog
+
+All notable changes to MRT Station are documented in this file.
+
+$CHANGELOG_ENTRY
+EOF
+fi
+
 # Stage all files
 git add -A
 
@@ -107,14 +132,25 @@ else
   git commit -m "chore(release): $NEXT_TAG - $COMMIT_MESSAGE"
 fi
 
-# Create annotated tag
-git tag -a "$NEXT_TAG" -m "MRT Station Release $NEXT_TAG"
+# Create annotated tag with release message
+git tag -a "$NEXT_TAG" -m "MRT Station Release $NEXT_TAG
+
+$COMMIT_MESSAGE"
 
 echo "[Release] Pushing $BRANCH to $REMOTE..."
 git push "$REMOTE" "HEAD:$BRANCH" || true
 
 echo "[Release] Pushing tag $NEXT_TAG to trigger GitHub Actions build..."
 git push "$REMOTE" "$NEXT_TAG" || true
+
+# If gh cli is authenticated, publish/update GitHub Release notes
+if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+  echo "[Release] Updating GitHub Release notes via gh CLI..."
+  gh release create "$NEXT_TAG" dist/mrt-station_*_amd64.deb \
+    --title "MRT Station $NEXT_TAG" \
+    --notes "$COMMIT_MESSAGE" \
+    --verify-tag || gh release edit "$NEXT_TAG" --notes "$COMMIT_MESSAGE" || true
+fi
 
 echo "=================================================="
 echo " Release $NEXT_TAG Dispatched Successfully!"

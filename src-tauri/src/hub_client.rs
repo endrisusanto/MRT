@@ -23,7 +23,10 @@ pub async fn start_heartbeat_loop(
 
     loop {
         let devices = {
-            let lock = cached_devices.lock().unwrap();
+            let mut lock = cached_devices.lock().unwrap();
+            if lock.is_empty() {
+                *lock = crate::device_scanner::scan_devices();
+            }
             lock.clone()
         };
 

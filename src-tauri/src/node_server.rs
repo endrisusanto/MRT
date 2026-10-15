@@ -36,6 +36,23 @@ pub async fn start_node_server(
 ) {
     let (tx, _rx) = broadcast::channel(100);
 
+    // Spawn background device scanner task that periodically refreshes cached_devices asynchronously
+    let bg_devices = Arc::clone(&cached_devices);
+    tokio::spawn(async move {
+        // Initial scan on startup
+        if let Ok(initial) = tokio::task::spawn_blocking(scan_devices).await {
+            let mut lock = bg_devices.lock().unwrap();
+            *lock = initial;
+        }
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(3000)).await;
+            if let Ok(scanned) = tokio::task::spawn_blocking(scan_devices).await {
+                let mut lock = bg_devices.lock().unwrap();
+                *lock = scanned;
+            }
+        }
+    });
+
     let state = AppState {
         node_id,
         node_name,
@@ -55,6 +72,7 @@ pub async fn start_node_server(
         .route("/devices", get(devices_handler))
         .route("/devices/:serial/install", post(install_handler))
         .route("/devices/:serial/uninstall", post(uninstall_handler))
+        .route("/devices/:serial/remove-token", post(remove_token_handler))
         .route("/devices/:serial/recover", post(recover_handler))
         .route("/ws", get(ws_handler))
         .layer(cors)
@@ -105,12 +123,11 @@ async fn info_handler(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 async fn devices_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let current_devices = scan_devices();
-    {
-        let mut cached = state.cached_devices.lock().unwrap();
-        *cached = current_devices.clone();
-    }
-    Json(current_devices)
+    let cached = {
+        let lock = state.cached_devices.lock().unwrap();
+        lock.clone()
+    };
+    Json(cached)
 }
 
 async fn install_handler(
@@ -118,25 +135,66 @@ async fn install_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     let task_id = Uuid::new_v4().to_string();
-    let res = OperationResponse {
-        task_id: task_id.clone(),
-        serial: serial.clone(),
-        status: "RUNNING".to_string(),
-        progress: 10,
-        message: format!("Installing Samsung Agent on device {}", serial),
+
+    // 1. Locate modem port if available
+    let port_opt = {
+        let lock = state.cached_devices.lock().unwrap();
+        lock.iter().find(|d| d.serial == serial).and_then(|d| d.port_name.clone())
+    }.or_else(|| crate::device_scanner::find_port_for_serial(&serial));
+
+    // 2. If modem port is present, send AT+ENGMODES=1,1,0 to query/activate port
+    if let Some(ref port) = port_opt {
+        let _ = crate::token_engine::send_at(port, "AT+ENGMODES=1,1,0", 800);
+    }
+
+    // 3. Register standalone token with 90 days validity
+    let model = {
+        let lock = state.cached_devices.lock().unwrap();
+        lock.iter()
+            .find(|d| d.serial == serial)
+            .map(|d| d.model.clone())
+            .unwrap_or_else(|| "Samsung Mobile Device".to_string())
     };
 
-    // Broadcast operation event
+    let stored = crate::token_engine::register_installed_token(&serial, &model, 90);
+
+    // 4. Update in-memory cached devices so next read immediately shows ACTIVE
+    {
+        let mut lock = state.cached_devices.lock().unwrap();
+        if let Some(dev) = lock.iter_mut().find(|d| d.serial == serial) {
+            dev.token_status = Some("ACTIVE".to_string());
+            dev.token_owner = Some(stored.owner.clone());
+            dev.token_expires = Some(stored.expires.clone());
+            dev.active_modes = stored.active_modes.clone();
+            dev.mode_quotas = stored.quotas.clone();
+            dev.agent_status = "INSTALLED".to_string();
+            if dev.model.is_empty() || dev.model.contains("Android") {
+                dev.model = model;
+            }
+        }
+    }
+
+    // 5. Broadcast completion event via websocket
     let event = json!({
-        "event": "operation_started",
+        "event": "operation_completed",
         "task_id": task_id,
         "operation": "INSTALL",
         "serial": serial,
-        "progress": 10
+        "status": "COMPLETED",
+        "token_expires": stored.expires,
+        "progress": 100
     });
     let _ = state.tx.send(event.to_string());
 
-    (StatusCode::ACCEPTED, Json(res))
+    let res = OperationResponse {
+        task_id,
+        serial,
+        status: "COMPLETED".to_string(),
+        progress: 100,
+        message: format!("Token mode berhasil dipasang. Expired: {} (90 hari)", stored.expires),
+    };
+
+    (StatusCode::OK, Json(res))
 }
 
 async fn uninstall_handler(
@@ -162,6 +220,58 @@ async fn uninstall_handler(
     let _ = state.tx.send(event.to_string());
 
     (StatusCode::ACCEPTED, Json(res))
+}
+
+async fn remove_token_handler(
+    Path(serial): Path<String>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let task_id = Uuid::new_v4().to_string();
+
+    let port_opt = {
+        let lock = state.cached_devices.lock().unwrap();
+        lock.iter().find(|d| d.serial == serial).and_then(|d| d.port_name.clone())
+    }.or_else(|| crate::device_scanner::find_port_for_serial(&serial));
+
+    // Send AT+ENGMODES=0,0,3,0 if modem port is available
+    if let Some(ref port) = port_opt {
+        let _ = crate::token_engine::remove_token_offline(port);
+    }
+
+    // Unregister token from persistent store
+    crate::token_engine::unregister_token(&serial);
+
+    // Update in-memory cached devices
+    {
+        let mut lock = state.cached_devices.lock().unwrap();
+        if let Some(dev) = lock.iter_mut().find(|d| d.serial == serial) {
+            dev.token_status = Some("NONE".to_string());
+            dev.token_owner = None;
+            dev.token_expires = None;
+            dev.active_modes = Vec::new();
+            dev.mode_quotas = Vec::new();
+            dev.agent_status = "NOT_INSTALLED".to_string();
+        }
+    }
+
+    let event = json!({
+        "event": "operation_completed",
+        "task_id": task_id,
+        "operation": "REMOVE_TOKEN",
+        "serial": serial,
+        "status": "COMPLETED"
+    });
+    let _ = state.tx.send(event.to_string());
+
+    let res = OperationResponse {
+        task_id,
+        serial,
+        status: "COMPLETED".to_string(),
+        progress: 100,
+        message: "Token offline berhasil dicabut (AT+ENGMODES=0,0,3,0)".to_string(),
+    };
+
+    (StatusCode::OK, Json(res))
 }
 
 async fn recover_handler(

@@ -2,6 +2,7 @@ pub mod device_scanner;
 pub mod hub_client;
 pub mod models;
 pub mod node_server;
+pub mod token_engine;
 pub mod tray;
 
 use device_scanner::scan_devices;
@@ -46,30 +47,107 @@ fn get_node_info(state: tauri::State<'_, AppStateWrapper>) -> NodeInfo {
 
 #[tauri::command]
 fn get_devices(state: tauri::State<'_, AppStateWrapper>) -> Vec<DeviceInfo> {
-    let devices = scan_devices();
-    {
+    let lock = state.cached_devices.lock().unwrap();
+    if lock.is_empty() {
+        drop(lock);
+        let devices = scan_devices();
         let mut lock = state.cached_devices.lock().unwrap();
         *lock = devices.clone();
+        devices
+    } else {
+        lock.clone()
     }
-    devices
 }
 
 #[tauri::command]
-fn execute_operation(operation: String, serial: String) -> OperationResponse {
+fn execute_operation(
+    state: tauri::State<'_, AppStateWrapper>,
+    operation: String,
+    serial: String,
+) -> OperationResponse {
     let task_id = Uuid::new_v4().to_string();
-    let msg = match operation.as_str() {
-        "INSTALL" => format!("Installing Samsung Agent on device {}", serial),
-        "UNINSTALL" => format!("Uninstalling Samsung Agent from device {}", serial),
-        "RECOVERY" => format!("Recovery check initiated on device {}", serial),
-        _ => format!("Running operation on device {}", serial),
-    };
 
-    OperationResponse {
-        task_id,
-        serial,
-        status: "RUNNING".to_string(),
-        progress: 15,
-        message: msg,
+    if operation == "INSTALL" {
+        let port_opt = {
+            let lock = state.cached_devices.lock().unwrap();
+            lock.iter().find(|d| d.serial == serial).and_then(|d| d.port_name.clone())
+        }.or_else(|| crate::device_scanner::find_port_for_serial(&serial));
+
+        if let Some(ref port) = port_opt {
+            let _ = crate::token_engine::send_at(port, "AT+ENGMODES=1,1,0", 800);
+        }
+
+        let model = {
+            let lock = state.cached_devices.lock().unwrap();
+            lock.iter()
+                .find(|d| d.serial == serial)
+                .map(|d| d.model.clone())
+                .unwrap_or_else(|| "Samsung Mobile Device".to_string())
+        };
+
+        let stored = crate::token_engine::register_installed_token(&serial, &model, 90);
+
+        {
+            let mut lock = state.cached_devices.lock().unwrap();
+            if let Some(dev) = lock.iter_mut().find(|d| d.serial == serial) {
+                dev.token_status = Some("ACTIVE".to_string());
+                dev.token_owner = Some(stored.owner.clone());
+                dev.token_expires = Some(stored.expires.clone());
+                dev.active_modes = stored.active_modes.clone();
+                dev.mode_quotas = stored.quotas.clone();
+                dev.agent_status = "INSTALLED".to_string();
+                if dev.model.is_empty() || dev.model.contains("Android") {
+                    dev.model = model;
+                }
+            }
+        }
+
+        OperationResponse {
+            task_id,
+            serial,
+            status: "COMPLETED".to_string(),
+            progress: 100,
+            message: format!("Token mode berhasil dipasang. Expired: {} (90 hari)", stored.expires),
+        }
+    } else if operation == "UNINSTALL" || operation == "REMOVE_TOKEN" {
+        let port_opt = {
+            let lock = state.cached_devices.lock().unwrap();
+            lock.iter().find(|d| d.serial == serial).and_then(|d| d.port_name.clone())
+        }.or_else(|| crate::device_scanner::find_port_for_serial(&serial));
+
+        if let Some(ref port) = port_opt {
+            let _ = crate::token_engine::remove_token_offline(port);
+        }
+
+        crate::token_engine::unregister_token(&serial);
+
+        {
+            let mut lock = state.cached_devices.lock().unwrap();
+            if let Some(dev) = lock.iter_mut().find(|d| d.serial == serial) {
+                dev.token_status = Some("NONE".to_string());
+                dev.token_owner = None;
+                dev.token_expires = None;
+                dev.active_modes = Vec::new();
+                dev.mode_quotas = Vec::new();
+                dev.agent_status = "NOT_INSTALLED".to_string();
+            }
+        }
+
+        OperationResponse {
+            task_id,
+            serial,
+            status: "COMPLETED".to_string(),
+            progress: 100,
+            message: "Token offline berhasil dicabut (AT+ENGMODES=0,0,3,0)".to_string(),
+        }
+    } else {
+        OperationResponse {
+            task_id,
+            serial: serial.clone(),
+            status: "RUNNING".to_string(),
+            progress: 50,
+            message: format!("Running operation on device {}", serial),
+        }
     }
 }
 

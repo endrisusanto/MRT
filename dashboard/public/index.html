@@ -21,10 +21,9 @@
   <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/base.css">
   <link rel="stylesheet" href="styles/components.css">
-  <link rel="stylesheet" href="styles/mobile.css">
 </head>
 <body>
-  <!-- Inline SVG Definition Symbols (Crisp & Clean) -->
+  <!-- Inline SVG Definition Symbols -->
   <svg style="display: none;">
     <symbol id="icon-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect x="2" y="2" width="20" height="8" rx="2"></rect>
@@ -32,29 +31,24 @@
       <line x1="6" y1="6" x2="6.01" y2="6"></line>
       <line x1="6" y1="18" x2="6.01" y2="18"></line>
     </symbol>
-    <symbol id="icon-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="4" y="4" width="16" height="16" rx="2"></rect>
-      <rect x="9" y="9" width="6" height="6"></rect>
-      <line x1="9" y1="1" x2="9" y2="4"></line>
-      <line x1="15" y1="1" x2="15" y2="4"></line>
-      <line x1="9" y1="20" x2="9" y2="23"></line>
-      <line x1="15" y1="20" x2="15" y2="23"></line>
-      <line x1="20" y1="9" x2="23" y2="9"></line>
-      <line x1="20" y1="14" x2="23" y2="14"></line>
-      <line x1="1" y1="9" x2="4" y2="9"></line>
-      <line x1="1" y1="14" x2="4" y2="14"></line>
+    <symbol id="icon-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="4 17 10 11 4 5"></polyline>
+      <line x1="12" y1="19" x2="20" y2="19"></line>
+    </symbol>
+    <symbol id="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"></line>
+      <line x1="6" y1="6" x2="18" y2="18"></line>
     </symbol>
     <symbol id="icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="23 4 23 10 17 10"></polyline>
       <polyline points="1 20 1 14 7 14"></polyline>
       <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
     </symbol>
-    <symbol id="icon-device" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="5" y="2" width="14" height="20" rx="3"></rect>
-      <line x1="12" y1="18" x2="12.01" y2="18"></line>
-      <line x1="9" y1="5" x2="15" y2="5"></line>
+    <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"></circle>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
     </symbol>
-    <symbol id="icon-usb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <symbol id="icon-device" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect x="5" y="2" width="14" height="20" rx="3"></rect>
       <line x1="12" y1="18" x2="12.01" y2="18"></line>
       <line x1="9" y1="5" x2="15" y2="5"></line>
@@ -67,9 +61,6 @@
     <symbol id="icon-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="3 6 5 6 21 6"></polyline>
       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-    </symbol>
-    <symbol id="icon-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
     </symbol>
     <symbol id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="5"></circle>
@@ -85,29 +76,70 @@
     <symbol id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
     </symbol>
-    <symbol id="icon-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="3"></circle>
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 12 15 18 9"></polyline>
+    </symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"></polyline>
+    </symbol>
+    <symbol id="icon-check-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6L7 17l-5-5"></path>
+      <path d="m22 10-7.5 7.5L13 16"></path>
+    </symbol>
+    <symbol id="icon-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+      <polyline points="22 4 12 14.01 9 11.01"></polyline>
+    </symbol>
+    <symbol id="icon-x-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="15" y1="9" x2="9" y2="15"></line>
+      <line x1="9" y1="9" x2="15" y2="15"></line>
+    </symbol>
+    <symbol id="icon-alert-triangle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+      <line x1="12" y1="9" x2="12" y2="13"></line>
+      <line x1="12" y1="17" x2="12.01" y2="17"></line>
     </symbol>
   </svg>
 
   <div class="app-shell">
-    <!-- Header -->
+    <!-- Header with Octopus Hub Fleet Stats Bar -->
     <header class="app-header">
       <div class="brand-section">
-        <img src="logo.png" alt="MRT Logo" style="width: 22px; height: 22px; object-fit: contain; flex-shrink: 0;">
-        <h1 class="brand-title">MRT DASHBOARD</h1>
-        <span class="brand-badge">HUB v2.0</span>
+        <div class="brand-logo-circle" style="width: 32px; height: 32px; background: #ffffff; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; padding: 4px; box-sizing: border-box; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.25);">
+          <img src="logo.png" alt="MRT Logo" style="width: 100%; height: 100%; object-fit: contain;">
+        </div>
+        <h1 class="brand-title">MRT STATION FLEET</h1>
+      </div>
+
+      <!-- Octopus Hub Stat Pills -->
+      <div class="fleet-stats-bar">
+        <div class="stat-pill active">
+          <svg class="icon"><use href="#icon-server"></use></svg>
+          <span>Nodes:</span>
+          <span class="count" id="stat-active-nodes">0</span>
+        </div>
+
+        <div class="stat-pill active">
+          <svg class="icon"><use href="#icon-device"></use></svg>
+          <span>Devices:</span>
+          <span class="count" id="stat-total-devices">0</span>
+        </div>
+
+        <div class="stat-pill">
+          <span>Active Tokens:</span>
+          <span class="count" id="stat-token-count" style="color: var(--status-ready-text);">0</span>
+        </div>
       </div>
 
       <div class="header-actions">
-        <div class="tab-group" role="tablist" aria-label="Views">
-          <button class="tab-btn active" id="tab-devices" role="tab" aria-selected="true">Devices</button>
-          <button class="tab-btn" id="tab-nodes" role="tab" aria-selected="false">Nodes</button>
+        <div class="stat-pill online-pill">
+          <span class="online-indicator"></span>
+          <span>Hub Online</span>
         </div>
-        <button id="btn-refresh" class="btn btn-secondary" aria-label="Refresh Data">
+        <button id="btn-refresh" class="btn btn-secondary btn-icon-labeled" aria-label="Refresh Data" title="Reload Fleet Data">
           <svg class="icon"><use href="#icon-refresh"></use></svg>
-          <span>Refresh</span>
+          <span class="btn-label">Reload</span>
         </button>
         <button id="btn-theme-toggle" class="btn-icon" aria-label="Toggle Color Theme" title="Toggle theme">
           <svg id="theme-icon-dark" class="icon"><use href="#icon-sun"></use></svg>
@@ -116,52 +148,167 @@
       </div>
     </header>
 
-    <!-- Global Underline Progress Bar -->
-    <div class="underline-progress-bar" id="global-progress">
-      <div class="underline-progress-fill" id="global-progress-fill"></div>
-    </div>
-
     <!-- Main Content -->
     <main class="app-main">
       <div class="content-pane">
-        <!-- Aggregation Stat Bar: 3 Horizontal Compact Cards -->
-        <div class="node-bar">
-          <div class="node-stat-card">
-            <span class="stat-label">Active Nodes</span>
-            <span class="stat-value font-mono" id="stat-active-nodes">0</span>
-            <span class="stat-sub">Discovered</span>
-          </div>
-          <div class="node-stat-card">
-            <span class="stat-label">Total Devices</span>
-            <span class="stat-value font-mono" id="stat-total-devices">0</span>
-            <span class="stat-sub">Connected</span>
-          </div>
-          <div class="node-stat-card">
-            <span class="stat-label">System Mode</span>
-            <span class="stat-value font-mono" style="color: var(--color-blue);">Standalone Hub</span>
-            <span class="stat-sub font-mono">Port 3010</span>
-          </div>
-        </div>
-
         <!-- View 1: Devices -->
         <section id="view-devices">
-          <div class="section-header">
-            <h2 class="section-title">
-              <svg class="icon"><use href="#icon-device"></use></svg>
-              <span>Network Devices</span>
-            </h2>
-            <span class="stat-sub" id="devices-status-sub">Live Updates</span>
-          </div>
+          <!-- Filter & Search Toolbar (Octopus Card Toolbar) -->
+          <section class="toolbar-section">
+            <div class="toolbar-row">
+              <div class="search-input-wrapper">
+                <svg class="search-icon icon"><use href="#icon-search"></use></svg>
+                <input
+                  type="text"
+                  id="filter-search"
+                  placeholder="Cari serial number, model, atau port..."
+                  class="search-input"
+                />
+              </div>
+              <div class="toolbar-actions-group">
+                <select id="filter-node" class="filter-select">
+                  <option value="all">Semua Workstation PC</option>
+                </select>
+                <button id="btn-open-terminal" class="btn btn-secondary btn-toolbar-terminal" title="Buka Global Live Terminal Console">
+                  <svg class="icon"><use href="#icon-terminal"></use></svg>
+                  <span>Terminal Logs</span>
+                </button>
+              </div>
+            </div>
+          </section>
 
-          <div class="device-grid" id="dashboard-devices-container" style="margin-top: var(--space-md);">
-            <!-- Populated via JS -->
-          </div>
+          <!-- Main Accordion: TARGET WORKFLOW & PERANGKAT TERPILIH -->
+          <div class="fleet-accordion-container">
+            <div class="fleet-accordion expanded" id="accordion-target-workflow">
+              <div class="fleet-accordion-header" id="btn-toggle-accordion">
+                <div class="accordion-header-main">
+                  <div class="header-left">
+                    <svg class="icon chevron-icon"><use href="#icon-chevron-down"></use></svg>
+                    <span class="accordion-title">TARGET WORKFLOW & PERANGKAT TERPILIH</span>
+                    <span class="badge-counter" id="badge-selected-count"><span class="count-value">0</span><span class="count-unit"> Unit</span></span>
+                  </div>
+                  <div class="header-right" onclick="event.stopPropagation();">
+                    <button id="btn-toggle-select-all" class="btn btn-secondary btn-toggle-select" title="Pilih Semua / Batalkan Pilihan">
+                      <svg class="icon" id="icon-select-state"><use href="#icon-check-check"></use></svg>
+                      <span class="btn-label" id="label-select-state">Pilih Semua</span>
+                    </button>
+                    <button id="btn-batch-install" class="btn btn-primary btn-workflow-action" title="Install 4 selected modes to checked devices">
+                      <svg class="icon"><use href="#icon-download"></use></svg>
+                      <span>Install Mode</span>
+                    </button>
+                    <button id="btn-batch-remove" class="btn btn-danger btn-workflow-action" title="Remove token offline via AT+ENGMODES=0,0,3,0">
+                      <svg class="icon"><use href="#icon-trash"></use></svg>
+                      <span>Hapus Token</span>
+                    </button>
+                  </div>
+                </div>
+                <!-- Chip device selected newline fullwidth di bawah title -->
+                <div class="model-recap-chips" id="model-recap-chips">
+                  <!-- Dynamic chips: e.g. <span class="chip-model">SM-F971B: 1</span> -->
+                </div>
+              </div>
 
-          <div class="empty-state" id="dashboard-devices-empty" style="display: none; margin-top: var(--space-md);">
-            <svg class="empty-icon"><use href="#icon-device"></use></svg>
-            <div class="empty-title">No Devices Detected Across Nodes</div>
-            <div class="empty-desc">
-              Make sure MRT Station desktop agents are running on technician PCs and reporting to this hub.
+              <div class="fleet-accordion-body" id="accordion-body-content">
+                <!-- Child Accordion 1: Mode Checklist -->
+                <div class="child-accordion expanded" id="child-accordion-modes">
+                  <div class="child-accordion-header" id="btn-toggle-child-modes">
+                    <div class="child-header-left">
+                      <svg class="icon chevron-icon"><use href="#icon-chevron-down"></use></svg>
+                      <span class="child-accordion-title">Mode Instalasi EM</span>
+                      <span class="child-accordion-badge">4 Modes Standalone</span>
+                    </div>
+                  </div>
+                  <div class="child-accordion-body" id="child-modes-body">
+                    <div class="mode-card-grid">
+                      <label class="mode-card checked" data-mode="0">
+                        <input type="checkbox" checked value="0" class="mode-checkbox">
+                        <div class="mode-card-info">
+                          <div class="mode-card-top">
+                            <span class="mode-index-badge badge-eng">0</span>
+                            <span class="mode-name">MODE_ENG_KERNEL</span>
+                          </div>
+                          <span class="mode-desc">Root Shell Access, Permissive SELinux, and Kernel dmesg logs</span>
+                        </div>
+                      </label>
+
+                      <label class="mode-card checked" data-mode="1">
+                        <input type="checkbox" checked value="1" class="mode-checkbox">
+                        <div class="mode-card-info">
+                          <div class="mode-card-top">
+                            <span class="mode-index-badge badge-em">1</span>
+                            <span class="mode-name">MODE_INIT_EM</span>
+                          </div>
+                          <span class="mode-desc">Initialize Engineering Mode Container & Knox TrustZone token</span>
+                        </div>
+                      </label>
+
+                      <label class="mode-card checked" data-mode="12">
+                        <input type="checkbox" checked value="12" class="mode-checkbox">
+                        <div class="mode-card-info">
+                          <div class="mode-card-top">
+                            <span class="mode-index-badge badge-sod">12</span>
+                            <span class="mode-name">MODE_ACCESS_SOD</span>
+                          </div>
+                          <span class="mode-desc">Secure On-Device Diagnostics: Camera, sensor, and baseband tests</span>
+                        </div>
+                      </label>
+
+                      <label class="mode-card checked" data-mode="49">
+                        <input type="checkbox" checked value="49" class="mode-checkbox">
+                        <div class="mode-card-info">
+                          <div class="mode-card-top">
+                            <span class="mode-index-badge badge-dump">49</span>
+                            <span class="mode-name">MODE_EXTRACT_RAM_DUMP</span>
+                          </div>
+                          <span class="mode-desc">Physical RAM Dump Extraction directly via modem interface</span>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Child Accordion 2: Fleet Target Devices Table -->
+                <div class="child-accordion expanded" id="child-accordion-devices">
+                  <div class="child-accordion-header" id="btn-toggle-child-devices">
+                    <div class="child-header-left">
+                      <svg class="icon chevron-icon"><use href="#icon-chevron-down"></use></svg>
+                      <span class="child-accordion-title">Daftar Perangkat Terhubung</span>
+                    </div>
+                  </div>
+                  <div class="child-accordion-body" id="child-devices-body">
+                    <div class="fleet-table-container">
+                      <table class="fleet-table">
+                        <thead>
+                          <tr>
+                            <th style="width: 38px; text-align: center;">
+                              <input type="checkbox" id="master-checkbox" title="Select all visible devices">
+                            </th>
+                            <th style="width: 130px;">PORT / NODE</th>
+                            <th style="width: 110px;">MODEL</th>
+                            <th style="width: 130px;">SERIAL</th>
+                            <th style="width: 115px; text-align: center;">STATUS TOKEN</th>
+                            <th style="width: 110px;">EXPIRED</th>
+                            <th style="width: 180px;">MODE TERPASANG</th>
+                            <th style="width: 130px; text-align: right;">AKSI</th>
+                          </tr>
+                        </thead>
+                        <tbody id="fleet-table-body">
+                          <!-- Populated via JS -->
+                        </tbody>
+                      </table>
+
+                      <!-- Empty State -->
+                      <div class="empty-state" id="fleet-table-empty" style="display: none;">
+                        <svg class="empty-icon"><use href="#icon-device"></use></svg>
+                        <div class="empty-title">No Devices Detected Across Nodes</div>
+                        <div class="empty-desc">
+                          Connect Samsung devices via USB to any active MRT Station node.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -191,20 +338,37 @@
       </div>
     </main>
 
-    <!-- Mobile Bottom Navigation (Sticky at bottom, 2 tabs only) -->
-    <nav class="mobile-nav" aria-label="Mobile Navigation">
-      <button class="mobile-nav-item active" id="nav-item-devices" aria-label="Devices View">
-        <svg class="icon"><use href="#icon-device"></use></svg>
-        <span>Devices</span>
-      </button>
-      <button class="mobile-nav-item" id="nav-item-nodes" aria-label="Nodes View">
-        <svg class="icon"><use href="#icon-server"></use></svg>
-        <span>Nodes</span>
-      </button>
-    </nav>
-
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toast-container" role="status" aria-live="polite"></div>
+  </div>
+
+  <!-- Live Terminal Log Drawer (Octopus Style) -->
+  <div class="drawer-backdrop" id="drawer-backdrop">
+    <div class="drawer-panel" id="drawer-panel">
+      <div class="drawer-header">
+        <div class="drawer-header-left">
+          <div class="drawer-logo-circle" style="width: 28px; height: 28px; background: #ffffff; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; padding: 4px; box-sizing: border-box; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.25);">
+            <svg class="icon" style="color: #0d1117;"><use href="#icon-terminal"></use></svg>
+          </div>
+          <div>
+            <div class="drawer-title" id="drawer-title">Live Stream Console</div>
+            <div class="drawer-subtitle" id="drawer-subtitle">Target: Global Stream</div>
+          </div>
+        </div>
+        <button id="btn-close-drawer" class="btn btn-icon" title="Close Drawer">
+          <svg class="icon"><use href="#icon-x"></use></svg>
+        </button>
+      </div>
+      <div class="drawer-content">
+        <div class="terminal-toolbar">
+          <span>Real-time AT modem communication & provisioning events</span>
+          <button id="btn-clear-logs" class="btn btn-secondary btn-sm">Clear</button>
+        </div>
+        <div class="terminal-box" id="terminal-box">
+          <!-- Live terminal lines populated via JS -->
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="main.js"></script>
