@@ -87,6 +87,11 @@
   flex-shrink: 0;
 }
 
+/* Header Navigation & Action Scroll Wrapper */
+.header-nav-scroll {
+  display: contents;
+}
+
 /* Octopus Fleet Stats Bar */
 .fleet-stats-bar {
   display: flex;
@@ -1062,22 +1067,34 @@
     white-space: nowrap;
   }
 
-  .header-actions {
-    order: 2;
+  /* Mobile Single Horizontal Scroll Bar for All Stats & Actions */
+  .header-nav-scroll {
     width: 100%;
     display: flex;
     align-items: center;
+    gap: 0.35rem;
     overflow-x: auto;
     flex-wrap: nowrap;
-    justify-content: flex-start;
-    gap: 0.35rem;
-    margin-left: 0;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+    margin: 0;
   }
 
-  .header-actions::-webkit-scrollbar {
+  .header-nav-scroll::-webkit-scrollbar {
     display: none;
+  }
+
+  .fleet-stats-bar,
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+    width: auto;
+    margin: 0;
+    overflow: visible;
   }
 
   .header-actions .online-pill,
@@ -1089,6 +1106,7 @@
     font-size: 0.7rem !important;
     padding: 0 0.5rem !important;
     flex-shrink: 0;
+    white-space: nowrap;
   }
 
   /* Compact button styling on mobile: hide text labels for icon-labeled buttons */
@@ -1122,30 +1140,12 @@
     flex-shrink: 0;
   }
 
-  .fleet-stats-bar {
-    order: 3;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    gap: 0.4rem;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-    margin: 0;
-  }
-
-  .fleet-stats-bar::-webkit-scrollbar {
-    display: none;
-  }
-
   .fleet-stats-bar .stat-pill {
     font-size: 0.725rem;
     padding: 0 0.55rem;
     height: 28px;
     flex-shrink: 0;
+    white-space: nowrap;
   }
 
   /* Toolbar Responsive */

@@ -112,39 +112,42 @@
         <h1 class="brand-title">MRT Station</h1>
       </div>
 
-      <!-- Octopus Hub Stat Pills -->
-      <div class="fleet-stats-bar">
-        <div class="stat-pill active">
-          <svg class="icon"><use href="#icon-server"></use></svg>
-          <span>Nodes:</span>
-          <span class="count" id="stat-active-nodes">0</span>
+      <!-- Header Navigation & Action Scroll Wrapper -->
+      <div class="header-nav-scroll">
+        <!-- Octopus Hub Stat Pills -->
+        <div class="fleet-stats-bar">
+          <div class="stat-pill active">
+            <svg class="icon"><use href="#icon-server"></use></svg>
+            <span>Nodes:</span>
+            <span class="count" id="stat-active-nodes">0</span>
+          </div>
+
+          <div class="stat-pill active">
+            <svg class="icon"><use href="#icon-device"></use></svg>
+            <span>Devices:</span>
+            <span class="count" id="stat-total-devices">0</span>
+          </div>
+
+          <div class="stat-pill">
+            <span>Active Tokens:</span>
+            <span class="count" id="stat-token-count" style="color: var(--status-ready-text);">0</span>
+          </div>
         </div>
 
-        <div class="stat-pill active">
-          <svg class="icon"><use href="#icon-device"></use></svg>
-          <span>Devices:</span>
-          <span class="count" id="stat-total-devices">0</span>
+        <div class="header-actions">
+          <div class="stat-pill online-pill">
+            <span class="online-indicator"></span>
+            <span>Hub Online</span>
+          </div>
+          <button id="btn-refresh" class="btn btn-secondary btn-icon-labeled" aria-label="Refresh Data" title="Reload Fleet Data">
+            <svg class="icon"><use href="#icon-refresh"></use></svg>
+            <span class="btn-label">Reload</span>
+          </button>
+          <button id="btn-theme-toggle" class="btn-icon" aria-label="Toggle Color Theme" title="Toggle theme">
+            <svg id="theme-icon-dark" class="icon"><use href="#icon-sun"></use></svg>
+            <svg id="theme-icon-light" class="icon" style="display: none;"><use href="#icon-moon"></use></svg>
+          </button>
         </div>
-
-        <div class="stat-pill">
-          <span>Active Tokens:</span>
-          <span class="count" id="stat-token-count" style="color: var(--status-ready-text);">0</span>
-        </div>
-      </div>
-
-      <div class="header-actions">
-        <div class="stat-pill online-pill">
-          <span class="online-indicator"></span>
-          <span>Hub Online</span>
-        </div>
-        <button id="btn-refresh" class="btn btn-secondary btn-icon-labeled" aria-label="Refresh Data" title="Reload Fleet Data">
-          <svg class="icon"><use href="#icon-refresh"></use></svg>
-          <span class="btn-label">Reload</span>
-        </button>
-        <button id="btn-theme-toggle" class="btn-icon" aria-label="Toggle Color Theme" title="Toggle theme">
-          <svg id="theme-icon-dark" class="icon"><use href="#icon-sun"></use></svg>
-          <svg id="theme-icon-light" class="icon" style="display: none;"><use href="#icon-moon"></use></svg>
-        </button>
       </div>
     </header>
 
@@ -177,14 +180,14 @@
             </div>
           </section>
 
-          <!-- Main Accordion: TARGET WORKFLOW & PERANGKAT TERPILIH -->
+          <!-- Main Accordion: EM TOKEN WORKFLOW -->
           <div class="fleet-accordion-container">
             <div class="fleet-accordion expanded" id="accordion-target-workflow">
               <div class="fleet-accordion-header" id="btn-toggle-accordion">
                 <div class="accordion-header-main">
                   <div class="header-left">
                     <svg class="icon chevron-icon"><use href="#icon-chevron-down"></use></svg>
-                    <span class="accordion-title">TARGET WORKFLOW & PERANGKAT TERPILIH</span>
+                    <span class="accordion-title">EM TOKEN WORKFLOW</span>
                     <span class="badge-counter" id="badge-selected-count"><span class="count-value">0</span><span class="count-unit"> Unit</span></span>
                   </div>
                   <div class="header-right" onclick="event.stopPropagation();">
