@@ -645,21 +645,37 @@
   background-color: rgba(47, 129, 247, 0.08);
 }
 
-/* Octopus In-Row Progress (Dual-layer fill + bottom accent bar + metric label) */
+/* Octopus In-Row Progress (Continuous Left-to-Right Progress Bar & Accent Line) */
 .fleet-table tr.flashing-row {
-  position: relative;
-  transition: background 0.2s linear;
+  background-color: rgba(56, 189, 248, 0.08) !important;
+  transition: background-color 0.2s ease;
 }
 
 .fleet-table tr.flashing-row td {
-  /* ponytail: paint dual-layer progress directly on cells so collapsed borders never clip it */
-  background-image: 
-    linear-gradient(to right, var(--accent-primary, #38bdf8) var(--progress-pct, 0%), transparent var(--progress-pct, 0%)),
-    linear-gradient(to right, rgba(56, 189, 248, 0.18) var(--progress-pct, 0%), transparent var(--progress-pct, 0%));
-  background-position: bottom left, top left;
-  background-size: 100% 3px, 100% 100%;
-  background-repeat: no-repeat;
-  border-bottom: 1px solid rgba(56, 189, 248, 0.35);
+  border-bottom: none !important;
+}
+
+.fleet-table tr.device-progress-track-row {
+  height: 3px !important;
+  line-height: 0 !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+.fleet-table td.device-progress-track-cell {
+  padding: 0 !important;
+  height: 3px !important;
+  border-top: none !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  background-color: rgba(56, 189, 248, 0.12) !important;
+  overflow: hidden;
+}
+
+.device-progress-fill-bar {
+  height: 3px;
+  background: var(--accent-primary, #38bdf8);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.7);
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .octopus-progress-metric {
@@ -1047,19 +1063,33 @@
 
 @media (max-width: 768px) {
   .app-header {
-    padding: 0.55rem 0.75rem;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.45rem;
+    padding: 0.45rem 0.75rem;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    gap: 0.5rem;
+  }
+
+  .app-header::-webkit-scrollbar {
+    display: none;
   }
 
   .brand-section {
-    order: 1;
-    width: 100%;
-    display: flex;
+    position: sticky;
+    left: 0;
+    z-index: 20;
+    background-color: var(--bg-surface);
+    display: inline-flex;
     align-items: center;
-    justify-content: flex-start;
     gap: var(--space-sm);
+    flex-shrink: 0;
+    padding-right: 0.6rem;
+    box-shadow: 6px 0 10px -4px rgba(0, 0, 0, 0.15);
   }
 
   .brand-title {
@@ -1070,20 +1100,14 @@
 
   /* Mobile Single Horizontal Scroll Bar for All Stats & Actions */
   .header-nav-scroll {
-    width: 100%;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    overflow-x: auto;
     flex-wrap: nowrap;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 2px;
+    flex-shrink: 0;
+    width: auto;
     margin: 0;
-  }
-
-  .header-nav-scroll::-webkit-scrollbar {
-    display: none;
+    overflow: visible;
   }
 
   .fleet-stats-bar,
@@ -1221,7 +1245,8 @@
     width: 100%;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: var(--space-sm);
   }
 
   /* ponytail: hide unit suffix on mobile, show only count number */

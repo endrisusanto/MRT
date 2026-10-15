@@ -468,12 +468,12 @@
         expireHtml = `<span class="device-expire-date">${escapeHtml(d.token_expires || '-')}</span>`;
       }
 
-      // In-row progress indicator (Octopus dual-layer fill + bottom 3px line + metric text)
+      // In-row progress indicator (Octopus continuous left-to-right bar + metric text)
       let rowStyle = '';
       let progressMetricHtml = '';
+      let progressBarRowHtml = '';
       if (progress) {
         const pct = progress.pct || 0;
-        /* ponytail: clean single-variable binding for Octopus progress fill + bottom line */
         rowStyle = `--progress-pct: ${pct}%;`;
         progressMetricHtml = `<span class="octopus-progress-metric">${escapeHtml(progress.step || 'RUN')}: ${pct}%</span>`;
         statusHtml = `
@@ -481,6 +481,13 @@
             <svg class="badge-icon icon-spin"><use href="#icon-refresh"></use></svg>
             ${pct}%
           </span>
+        `;
+        progressBarRowHtml = `
+          <tr class="device-progress-track-row" data-serial="${escapeHtml(d.serial)}">
+            <td colspan="8" class="device-progress-track-cell">
+              <div class="device-progress-fill-bar" style="width: ${pct}%;"></div>
+            </td>
+          </tr>
         `;
       }
 
@@ -509,6 +516,7 @@
             </div>
           </td>
         </tr>
+        ${progressBarRowHtml}
       `;
     }).join('');
 
