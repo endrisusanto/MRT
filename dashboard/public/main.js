@@ -31,7 +31,6 @@
   // Mobile nav
   const navItemDevices = document.getElementById('nav-item-devices');
   const navItemNodes = document.getElementById('nav-item-nodes');
-  const navItemRefresh = document.getElementById('nav-item-refresh');
 
   // Theme Management
   function initTheme() {
@@ -340,7 +339,6 @@
 
     if (navItemDevices) navItemDevices.addEventListener('click', () => showView('devices'));
     if (navItemNodes) navItemNodes.addEventListener('click', () => showView('nodes'));
-    if (navItemRefresh) navItemRefresh.addEventListener('click', loadDashboardData);
 
     refreshBtn.addEventListener('click', loadDashboardData);
 

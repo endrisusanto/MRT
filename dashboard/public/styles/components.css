@@ -340,9 +340,14 @@
 }
 
 .empty-icon {
-  width: 32px;
-  height: 32px;
-  color: var(--color-text-muted);
+  width: 36px;
+  height: 36px;
+  stroke: var(--color-text-muted);
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
 }
 
 .empty-title {

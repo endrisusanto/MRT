@@ -1,14 +1,19 @@
-/* Mobile bottom navigation */
+/* Mobile bottom navigation (Sticky at bottom) */
 .mobile-nav {
   display: none;
-  height: 52px;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(48px + env(safe-area-inset-bottom, 0px));
+  padding: 0 var(--space-md);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   background-color: var(--color-bg-surface);
   border-top: 1px solid var(--color-border);
-  padding: 0 var(--space-sm);
   align-items: center;
   justify-content: space-around;
-  flex-shrink: 0;
   z-index: 100;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .mobile-nav-item {
@@ -17,11 +22,13 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-height: 44px;
-  min-width: 56px;
+  height: 44px;
+  flex: 1;
+  max-width: 160px;
   color: var(--color-text-muted);
   font-size: var(--text-2xs);
   font-weight: 600;
+  transition: color var(--transition-fast);
 }
 
 .mobile-nav-item.active {
@@ -33,18 +40,60 @@
   height: 18px;
 }
 
-/* Tablet Breakpoint (480px - 768px) */
+/* Tablet & Mobile Breakpoints */
 @media (max-width: 768px) {
   .app-header {
-    padding: 0 var(--space-md);
+    padding: 0 var(--space-sm);
+    height: 44px;
+  }
+
+  .brand-title {
+    font-size: var(--text-sm);
+  }
+
+  /* 3 Horizontal Compact Stat Cards */
+  .node-bar {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  .node-stat-card {
+    padding: 6px 8px !important;
+    min-height: 52px !important;
+    border-radius: var(--radius-md) !important;
+    gap: 1px !important;
+    justify-content: center !important;
+  }
+
+  .stat-label {
+    font-size: 8.5px !important;
+    letter-spacing: 0.2px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .stat-value {
+    font-size: var(--text-xs) !important;
+    line-height: 1.2 !important;
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .stat-sub {
+    font-size: 8.5px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
   }
 
   .device-grid {
     grid-template-columns: 1fr;
-  }
-
-  .node-bar {
-    grid-template-columns: repeat(2, 1fr);
   }
 
   .mobile-nav {
@@ -52,24 +101,9 @@
   }
 
   .content-pane {
-    padding: var(--space-md);
-    padding-bottom: 64px; /* clearance for bottom nav */
-  }
-}
-
-/* Mobile Breakpoint (< 480px) */
-@media (max-width: 480px) {
-  .app-header {
-    height: 44px;
-    padding: 0 var(--space-sm);
-  }
-
-  .brand-title {
-    font-size: var(--text-base);
-  }
-
-  .node-bar {
-    grid-template-columns: 1fr;
+    padding: var(--space-sm);
+    padding-bottom: 60px; /* clear sticky bottom nav */
+    gap: var(--space-sm);
   }
 
   .device-card {
@@ -83,11 +117,6 @@
 
   .device-actions .btn {
     flex: 1 1 calc(50% - var(--space-xs));
-    min-height: 36px;
-  }
-
-  .content-pane {
-    padding: var(--space-sm);
-    padding-bottom: 64px;
+    min-height: 34px;
   }
 }
