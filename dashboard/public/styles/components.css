@@ -1296,4 +1296,65 @@
   .drawer-panel {
     max-width: 100%;
   }
+
+  .app-footer {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 10px;
+    font-size: 10px;
+  }
+}
+
+/* App Footer & Build Version Tag */
+.app-footer {
+  height: 32px;
+  min-height: 32px;
+  background-color: var(--bg-surface, #ffffff);
+  border-top: 1px solid var(--border-subtle, #d0d7de);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 11px;
+  color: var(--text-secondary, #8b949e);
+  flex-shrink: 0;
+  user-select: none;
+  z-index: 10;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--color-green, #238636);
+  box-shadow: 0 0 6px rgba(46, 160, 67, 0.45);
+}
+
+.footer-text {
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.version-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-primary, #38bdf8);
+  background-color: var(--bg-subtle, #21262d);
+  border: 1px solid var(--border-subtle, #30363d);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.4px;
 }

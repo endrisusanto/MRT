@@ -92,7 +92,7 @@ async fn health_handler() -> impl IntoResponse {
     Json(json!({
         "status": "ok",
         "service": "mrt-station-node",
-        "version": "2.0.0"
+        "version": env!("CARGO_PKG_VERSION")
     }))
 }
 
@@ -114,7 +114,7 @@ async fn info_handler(State(state): State<AppState>) -> impl IntoResponse {
         ip_address: ip,
         port: 7890,
         os: std::env::consts::OS.to_string(),
-        version: "2.0.0".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
         device_count,
         uptime_seconds: uptime,
     };

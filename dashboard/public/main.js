@@ -264,6 +264,10 @@
         if (res.ok) {
           const info = await res.json();
           nodes = [info];
+          if (info.version) {
+            const vTag = document.getElementById('app-version-tag');
+            if (vTag) vTag.textContent = `v${info.version}`;
+          }
         }
       } catch (e) {
         const res = await fetch('/api/nodes');

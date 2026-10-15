@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "MRT Station - Samsung Node Agent",
+        "title": "MRT Station",
         "width": 1024,
         "height": 720,
         "minWidth": 480,
