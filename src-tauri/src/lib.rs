@@ -20,6 +20,7 @@ pub struct AppStateWrapper {
     pub node_name: String,
     pub start_time: Instant,
     pub cached_devices: Arc<Mutex<Vec<DeviceInfo>>>,
+    pub auth_manager: crate::auth_manager::AuthManager,
 }
 
 #[tauri::command]
@@ -42,6 +43,7 @@ fn get_node_info(state: tauri::State<'_, AppStateWrapper>) -> NodeInfo {
         port: 7890,
         os: std::env::consts::OS.to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
+        is_relay: state.auth_manager.is_relay(),
         device_count,
         uptime_seconds: uptime,
     }
@@ -168,6 +170,10 @@ pub fn run() {
     let hub_node_name = hostname.clone();
     let hub_devices = Arc::clone(&cached_devices);
 
+    let auth_manager = crate::auth_manager::AuthManager::new();
+    let server_auth_manager = auth_manager.clone();
+    let hub_auth_manager = auth_manager.clone();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(AppStateWrapper {
@@ -175,6 +181,7 @@ pub fn run() {
             node_name: hostname,
             start_time,
             cached_devices,
+            auth_manager: auth_manager.clone(),
         })
         .invoke_handler(tauri::generate_handler![
             get_node_info,
@@ -192,13 +199,14 @@ pub fn run() {
                     server_node_name,
                     start_time,
                     server_devices,
+                    server_auth_manager,
                 )
                 .await;
             });
 
             // Spawn hub heartbeat client
             tauri::async_runtime::spawn(async move {
-                hub_client::start_heartbeat_loop(hub_node_id, hub_node_name, hub_devices).await;
+                hub_client::start_heartbeat_loop(hub_node_id, hub_node_name, hub_devices, hub_auth_manager).await;
             });
 
             Ok(())

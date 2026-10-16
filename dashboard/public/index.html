@@ -426,21 +426,10 @@
           <div class="settings-field">
             <label class="settings-label" for="setting-station-mode">Peran Instance Ini</label>
             <select id="setting-station-mode" class="filter-select settings-select">
-              <option value="station">Workstation (Client Perangkat USB)</option>
-              <option value="relay">Relay Agent (Host Windows Intranet KMS)</option>
+              <option value="station">Workstation Klien (Request Token via Central Hub)</option>
+              <option value="relay">Workstation + Relay Server (Terhubung ke KMS Intranet)</option>
             </select>
-          </div>
-
-          <div class="settings-field" id="field-relay-url">
-            <label class="settings-label" for="setting-relay-url">Relay Agent Target URL</label>
-            <input
-              type="url"
-              id="setting-relay-url"
-              class="settings-input"
-              placeholder="http://192.168.1.50:7890"
-              spellcheck="false"
-            />
-            <span class="settings-hint">URL instance Relay Agent di PC Windows intranet yang memproses sign token</span>
+            <span class="settings-hint">Routing token otomatis melalui Central Hub (mrt.endrisusanto.my.id) tanpa perlu konfigurasi IP manual</span>
           </div>
         </div>
 

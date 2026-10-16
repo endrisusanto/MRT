@@ -33,6 +33,8 @@ pub struct NodeInfo {
     pub port: u16,
     pub os: String,
     pub version: String,
+    #[serde(default)]
+    pub is_relay: bool,
     pub device_count: usize,
     pub uptime_seconds: u64,
 }
@@ -59,6 +61,8 @@ pub struct NodeHeartbeat {
     pub node_name: String,
     pub ip_address: String,
     pub port: u16,
+    #[serde(default)]
+    pub is_relay: bool,
     pub devices: Vec<DeviceInfo>,
     pub timestamp: String,
 }

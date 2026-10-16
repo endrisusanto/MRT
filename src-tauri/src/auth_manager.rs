@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
     pub station_mode: String,
+    #[serde(default)]
     pub relay_url: Option<String>,
     pub kms_endpoint: String,
     pub sso_username: String,
@@ -68,6 +69,11 @@ impl AuthManager {
     pub fn update_config(&self, new_config: AuthConfig) {
         let mut lock = self.config.write().unwrap();
         *lock = new_config;
+    }
+
+    pub fn is_relay(&self) -> bool {
+        let lock = self.config.read().unwrap();
+        lock.station_mode == "relay"
     }
 
     pub fn get_relay_url(&self) -> Option<String> {

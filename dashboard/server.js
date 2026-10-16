@@ -43,7 +43,7 @@ app.get('/health', (req, res) => {
 
 // Receive heartbeat from desktop nodes
 app.post('/api/nodes/heartbeat', (req, res) => {
-  const { node_id, node_name, ip_address, port, devices, timestamp } = req.body;
+  const { node_id, node_name, ip_address, port, devices, timestamp, is_relay } = req.body;
 
   if (!node_id) {
     return res.status(400).json({ error: 'node_id is required' });
@@ -58,6 +58,7 @@ app.post('/api/nodes/heartbeat', (req, res) => {
     name: node_name || node_id,
     ip: resolvedIp,
     port: port || 7890,
+    is_relay: Boolean(is_relay),
     devices: Array.isArray(devices) ? devices : [],
     lastSeen: Date.now(),
     timestamp: timestamp || new Date().toISOString()
@@ -67,6 +68,7 @@ app.post('/api/nodes/heartbeat', (req, res) => {
   broadcast({
     event: 'node_updated',
     node_id,
+    is_relay: Boolean(is_relay),
     device_count: Array.isArray(devices) ? devices.length : 0
   });
 
@@ -82,6 +84,7 @@ app.get('/api/nodes', (req, res) => {
     const isOnline = now - node.lastSeen < 35000; // 35 seconds threshold
     list.push({
       ...node,
+      is_relay: Boolean(node.is_relay),
       status: isOnline ? 'ONLINE' : 'OFFLINE',
       secondsAgo: Math.round((now - node.lastSeen) / 1000)
     });
@@ -143,6 +146,40 @@ app.post('/api/operations', async (req, res) => {
   } catch (err) {
     res.status(502).json({
       error: 'Failed to contact node agent',
+      message: err.message
+    });
+  }
+});
+
+// Proxy token signing request to active Relay Agent
+app.post(['/api/relay/request-token', '/relay/request-token'], async (req, res) => {
+  const { serial, model, modes } = req.body;
+  const now = Date.now();
+
+  const relayNode = Array.from(nodes.values()).find(
+    (n) => n.is_relay && now - n.lastSeen < 35000
+  );
+
+  if (!relayNode) {
+    return res.status(503).json({
+      error: 'No active Relay Agent online',
+      message: 'Tidak ada instance MRT Relay Agent yang sedang aktif di Central Hub'
+    });
+  }
+
+  const targetUrl = `http://${relayNode.ip}:${relayNode.port || 7890}/relay/request-token`;
+  try {
+    const relayRes = await fetch(targetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serial, model, modes })
+    });
+
+    const data = await relayRes.json();
+    res.status(relayRes.status).json(data);
+  } catch (err) {
+    res.status(502).json({
+      error: 'Failed to contact Relay Agent node',
       message: err.message
     });
   }

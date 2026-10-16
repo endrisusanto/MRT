@@ -26,7 +26,12 @@ pub async fn request_signed_token(
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
-    let url = format!("{}/relay/request-token", relay_url.trim_end_matches('/'));
+    // ponytail: automatically route to /api/relay/request-token
+    let url = if relay_url.ends_with("/request-token") {
+        relay_url.to_string()
+    } else {
+        format!("{}/api/relay/request-token", relay_url.trim_end_matches('/'))
+    };
     let req = RelayRequest {
         serial: serial.to_string(),
         model: model.to_string(),

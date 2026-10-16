@@ -46,8 +46,6 @@
   const settingsBackdrop = document.getElementById('settings-backdrop');
   const btnCloseSettings = document.getElementById('btn-close-settings');
   const selectStationMode = document.getElementById('setting-station-mode');
-  const fieldRelayUrl = document.getElementById('field-relay-url');
-  const inputRelayUrl = document.getElementById('setting-relay-url');
   const inputKmsEndpoint = document.getElementById('setting-kms-endpoint');
   const inputSsoUsername = document.getElementById('setting-sso-username');
   const inputSsoPassword = document.getElementById('setting-sso-password');
@@ -604,14 +602,24 @@
       return;
     }
     if (nodesEmpty) nodesEmpty.style.display = 'none';
-    nodesContainer.innerHTML = allNodes.map(n => `
+    nodesContainer.innerHTML = allNodes.map(n => {
+      const isRelay = Boolean(n.is_relay);
+      const relayBadge = isRelay
+        ? '<span class="status-badge" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);font-size:10px;padding:2px 6px;">Relay Agent</span>'
+        : '';
+      const ip = n.ip_address || n.ip || '127.0.0.1';
+      const devCount = n.device_count || (Array.isArray(n.devices) ? n.devices.length : 0);
+      return `
       <div class="node-stat-card">
-        <span class="stat-label">Agent Node</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <span class="stat-label">Agent Node</span>
+          ${relayBadge}
+        </div>
         <span class="stat-value font-mono">${escapeHtml(n.name || n.id)}</span>
-        <span class="stat-sub font-mono">${escapeHtml(n.ip_address)}:${n.port || 7890}</span>
-        <div style="margin-top: 6px; font-size: 11px; color: var(--color-green);">Online • ${n.device_count || 0} Devices Attached</div>
+        <span class="stat-sub font-mono">${escapeHtml(ip)}:${n.port || 7890}</span>
+        <div style="margin-top: 6px; font-size: 11px; color: var(--color-green);">Online • ${devCount} Devices Attached</div>
       </div>
-    `).join('');
+    `;}).join('');
   }
 
   function getNodeBaseUrl(serial) {
@@ -871,9 +879,9 @@
       });
     }
 
-    if (selectStationMode && fieldRelayUrl) {
+    if (selectStationMode) {
       selectStationMode.addEventListener('change', () => {
-        fieldRelayUrl.style.display = selectStationMode.value === 'relay' ? 'none' : 'flex';
+        saveSettings(false);
       });
     }
 
@@ -897,7 +905,6 @@
   // Settings and auto-login state
   const DEFAULT_SETTINGS = {
     stationMode: 'station',
-    relayUrl: '',
     kmsEndpoint: 'https://em.sec.samsung.net/anonymous/janusplatform/',
     ssoUsername: '',
     ssoPassword: '',
@@ -932,16 +939,11 @@
     }
 
     if (selectStationMode) selectStationMode.value = currentSettings.stationMode || 'station';
-    if (inputRelayUrl) inputRelayUrl.value = currentSettings.relayUrl || '';
     if (inputKmsEndpoint) inputKmsEndpoint.value = currentSettings.kmsEndpoint || DEFAULT_SETTINGS.kmsEndpoint;
     if (inputSsoUsername) inputSsoUsername.value = currentSettings.ssoUsername || '';
     if (inputSsoPassword) inputSsoPassword.value = currentSettings.ssoPassword || '';
     if (cbAutoLogin) cbAutoLogin.checked = currentSettings.autoLogin !== false;
     if (cbAutoRefresh) cbAutoRefresh.checked = currentSettings.autoRefresh !== false;
-
-    if (fieldRelayUrl) {
-      fieldRelayUrl.style.display = currentSettings.stationMode === 'relay' ? 'none' : 'flex';
-    }
 
     syncSettingsWithBackend();
   }
@@ -954,7 +956,6 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           station_mode: currentSettings.stationMode,
-          relay_url: currentSettings.stationMode === 'relay' ? '' : currentSettings.relayUrl,
           kms_endpoint: currentSettings.kmsEndpoint,
           sso_username: currentSettings.ssoUsername,
           sso_password: currentSettings.ssoPassword,
@@ -969,7 +970,6 @@
 
   function saveSettings(notify = true) {
     currentSettings.stationMode = selectStationMode ? selectStationMode.value : 'station';
-    currentSettings.relayUrl = inputRelayUrl ? inputRelayUrl.value.trim() : '';
     currentSettings.kmsEndpoint = inputKmsEndpoint ? inputKmsEndpoint.value.trim() : '';
     currentSettings.ssoUsername = inputSsoUsername ? inputSsoUsername.value.trim() : '';
     currentSettings.ssoPassword = inputSsoPassword ? inputSsoPassword.value : '';
