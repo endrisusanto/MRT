@@ -71,32 +71,120 @@ pub fn try_auto_enable_modem(serial: &str) {
     }
 }
 
+/// ponytail: Resolve adb binary location on Windows if not in system PATH
+pub fn find_adb_executable() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        let candidates = [
+            "adb.exe",
+            "adb",
+            r"C:\platform-tools\adb.exe",
+            r"C:\adb\adb.exe",
+            r"C:\Program Files\Samsung\Smart Switch\adb.exe",
+            r"C:\Program Files (x86)\Samsung\Smart Switch\adb.exe",
+        ];
+        for c in candidates {
+            if Path::new(c).exists() {
+                return c.to_string();
+            }
+        }
+    }
+    "adb".to_string()
+}
+
+/// ponytail: Queries Windows PnP for Samsung USB composite devices and modem COM ports
+#[cfg(target_os = "windows")]
+pub fn get_windows_pnp_devices() -> (HashMap<String, String>, Vec<(String, String)>) {
+    let mut serial_to_port = HashMap::new();
+    let mut pnp_devices = Vec::new();
+
+    let ps_cmd = "Get-CimInstance Win32_PnPEntity | Where-Object { $_.DeviceID -match 'VID_04E8|VID_18D1' } | ForEach-Object { \"$($_.DeviceID)||$($_.Name)||$($_.Caption)\" }";
+    if let Ok(output) = silent_command("powershell").args(["-NoProfile", "-Command", ps_cmd]).output() {
+        if let Ok(text) = String::from_utf8(output.stdout) {
+            let mut found_serials = Vec::new();
+            let mut modem_ports = Vec::new();
+
+            for line in text.lines() {
+                let parts: Vec<&str> = line.trim().split("||").collect();
+                if parts.len() >= 3 {
+                    let dev_id = parts[0];
+                    let name = parts[1];
+                    let caption = parts[2];
+
+                    if caption.contains("(COM") || name.contains("(COM") {
+                        let target = if caption.contains("(COM") { caption } else { name };
+                        if let Some(start) = target.find("(COM") {
+                            if let Some(end) = target[start..].find(')') {
+                                let port = &target[start + 1..start + end];
+                                modem_ports.push(port.to_string());
+                            }
+                        }
+                    }
+
+                    if dev_id.starts_with("USB\\") && !dev_id.contains("&MI_") {
+                        if let Some(last_slash) = dev_id.rfind('\\') {
+                            let serial = dev_id[last_slash + 1..].trim();
+                            if !serial.is_empty() && !serial.contains('&') {
+                                found_serials.push((serial.to_string(), name.to_string()));
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (idx, (serial, name)) in found_serials.iter().enumerate() {
+                if let Some(port) = modem_ports.get(idx).or_else(|| modem_ports.first()) {
+                    serial_to_port.insert(serial.clone(), port.clone());
+                }
+                pnp_devices.push((serial.clone(), name.clone()));
+            }
+        }
+    }
+
+    (serial_to_port, pnp_devices)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn get_windows_pnp_devices() -> (HashMap<String, String>, Vec<(String, String)>) {
+    (HashMap::new(), Vec::new())
+}
+
 pub fn get_serial_by_id_map() -> HashMap<String, String> {
-    let mut map = HashMap::new();
-    let by_id = Path::new("/dev/serial/by-id");
-    if let Ok(entries) = std::fs::read_dir(by_id) {
-        for entry in entries.flatten() {
-            let filename = entry.file_name().to_string_lossy().to_string();
-            // Expected format: usb-SAMSUNG_SAMSUNG_Android_<SERIAL>-if01
-            if filename.contains("SAMSUNG") && filename.contains("-if01") {
-                if let Some(pos) = filename.find("Android_") {
-                    let sub = &filename[pos + 8..];
-                    if let Some(end) = sub.find("-if01") {
-                        let serial = &sub[..end];
-                        if let Ok(target) = std::fs::canonicalize(entry.path()) {
-                            map.insert(serial.to_string(), target.to_string_lossy().to_string());
+    #[cfg(target_os = "windows")]
+    {
+        let (map, _) = get_windows_pnp_devices();
+        return map;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut map = HashMap::new();
+        let by_id = Path::new("/dev/serial/by-id");
+        if let Ok(entries) = std::fs::read_dir(by_id) {
+            for entry in entries.flatten() {
+                let filename = entry.file_name().to_string_lossy().to_string();
+                // Expected format: usb-SAMSUNG_SAMSUNG_Android_<SERIAL>-if01
+                if filename.contains("SAMSUNG") && filename.contains("-if01") {
+                    if let Some(pos) = filename.find("Android_") {
+                        let sub = &filename[pos + 8..];
+                        if let Some(end) = sub.find("-if01") {
+                            let serial = &sub[..end];
+                            if let Ok(target) = std::fs::canonicalize(entry.path()) {
+                                map.insert(serial.to_string(), target.to_string_lossy().to_string());
+                            }
                         }
                     }
                 }
             }
         }
+        map
     }
-    map
 }
 
 pub fn get_adb_models_map() -> HashMap<String, String> {
     let mut map = HashMap::new();
-    if let Ok(output) = silent_command("adb").args(["devices", "-l"]).output() {
+    let adb = find_adb_executable();
+    if let Ok(output) = silent_command(&adb).args(["devices", "-l"]).output() {
         if let Ok(text) = String::from_utf8(output.stdout) {
             for line in text.lines() {
                 let trimmed = line.trim();
@@ -120,9 +208,47 @@ pub fn get_adb_models_map() -> HashMap<String, String> {
 }
 
 pub fn scan_devices() -> Vec<DeviceInfo> {
-    let mut devices = Vec::new();
+    let mut devices: Vec<DeviceInfo> = Vec::new();
     let ports_map = get_serial_by_id_map();
     let adb_models = get_adb_models_map();
+
+    // 0. Register devices discovered via Windows PnP if running on Windows
+    #[cfg(target_os = "windows")]
+    {
+        let (_, pnp_devs) = get_windows_pnp_devices();
+        for (serial, pnp_name) in pnp_devs {
+            let port_name = ports_map.get(&serial).cloned();
+            let model = adb_models.get(&serial).cloned().unwrap_or_else(|| {
+                if pnp_name.contains("SAMSUNG") || pnp_name.contains("Composite") {
+                    "Samsung Mobile Device".to_string()
+                } else {
+                    pnp_name
+                }
+            });
+            let conn_type = if port_name.is_some() {
+                "USB+Modem".to_string()
+            } else {
+                "USB".to_string()
+            };
+
+            devices.push(DeviceInfo {
+                serial,
+                model,
+                vendor_id: SAMSUNG_VID,
+                product_id: 0x6860,
+                connection_type: conn_type,
+                agent_status: "STANDBY".to_string(),
+                battery_level: Some(85),
+                port_name,
+                last_seen: Utc::now().to_rfc3339(),
+                token_status: None,
+                token_owner: None,
+                token_expires: None,
+                active_modes: Vec::new(),
+                mode_quotas: Vec::new(),
+            });
+        }
+    }
 
     // 1. Scan USB devices via rusb
     if let Ok(usb_devices) = rusb::devices() {
@@ -173,12 +299,22 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
                         continue;
                     }
 
+                    // ponytail: Skip fallback placeholder if real device is already registered
+                    if serial_str.starts_with("USB-") && !devices.is_empty() {
+                        continue;
+                    }
+
+                    // Skip if already registered
+                    if devices.iter().any(|d| d.serial == serial_str) {
+                        continue;
+                    }
+
                     // Match true Samsung model from ADB if available
                     if let Some(real_model) = adb_models.get(&serial_str) {
                         model_str = real_model.clone();
                     }
 
-                    // Match modem port from /dev/serial/by-id/
+                    // Match modem port from ports_map
                     let port_name = ports_map.get(&serial_str).cloned();
                     if port_name.is_none() {
                         try_auto_enable_modem(&serial_str);
@@ -210,7 +346,7 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
         }
     }
 
-    // 2. Also register any ADB devices not captured by rusb
+    // 2. Also register any ADB devices not captured by rusb/pnp
     for (serial, model) in &adb_models {
         if !devices.iter().any(|d| d.serial == *serial) {
             let port_name = ports_map.get(serial).cloned();
@@ -244,15 +380,34 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
     // 3. Fallback scan serial ports via serialport if port_name still missing
     if let Ok(ports) = serialport::available_ports() {
         for p in ports {
-            if let serialport::SerialPortType::UsbPort(info) = p.port_type {
-                if (info.vid == SAMSUNG_VID || info.vid == GOOGLE_VID) && !devices.iter().any(|d| d.port_name.as_deref() == Some(&p.port_name)) {
-                    let serial_str = info.serial_number.clone().unwrap_or_else(|| p.port_name.clone());
+            let is_samsung = match &p.port_type {
+                serialport::SerialPortType::UsbPort(info) => {
+                    info.vid == SAMSUNG_VID
+                        || info.vid == GOOGLE_VID
+                        || info.manufacturer.as_deref().unwrap_or("").to_uppercase().contains("SAMSUNG")
+                        || info.product.as_deref().unwrap_or("").to_uppercase().contains("SAMSUNG")
+                }
+                _ => false,
+            };
+
+            if is_samsung {
+                // If there is an existing device without a port, associate this port with it
+                if let Some(dev) = devices.iter_mut().find(|d| d.port_name.is_none()) {
+                    dev.port_name = Some(p.port_name.clone());
+                    dev.connection_type = "USB+Modem".to_string();
+                } else if !devices.iter().any(|d| d.port_name.as_deref() == Some(&p.port_name)) {
+                    let serial_str = match &p.port_type {
+                        serialport::SerialPortType::UsbPort(info) => {
+                            info.serial_number.clone().unwrap_or_else(|| p.port_name.clone())
+                        }
+                        _ => p.port_name.clone(),
+                    };
                     let model_str = adb_models.get(&serial_str).cloned().unwrap_or_else(|| "Samsung Mobile Device".to_string());
                     devices.push(DeviceInfo {
                         serial: serial_str,
                         model: model_str,
-                        vendor_id: info.vid,
-                        product_id: info.pid,
+                        vendor_id: SAMSUNG_VID,
+                        product_id: 0x6860,
                         connection_type: "Modem".to_string(),
                         agent_status: "STANDBY".to_string(),
                         battery_level: None,
@@ -326,9 +481,12 @@ pub fn find_port_for_serial(serial: &str) -> Option<String> {
     }
     if let Ok(ports) = serialport::available_ports() {
         for p in ports {
-            if let serialport::SerialPortType::UsbPort(info) = p.port_type {
+            if let serialport::SerialPortType::UsbPort(info) = &p.port_type {
                 if info.serial_number.as_deref() == Some(serial) {
-                    return Some(p.port_name);
+                    return Some(p.port_name.clone());
+                }
+                if info.vid == SAMSUNG_VID || info.product.as_deref().unwrap_or("").contains("SAMSUNG") {
+                    return Some(p.port_name.clone());
                 }
             }
         }
