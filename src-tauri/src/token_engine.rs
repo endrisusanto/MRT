@@ -295,16 +295,81 @@ pub fn parse_engmodes_info(res9: &str, res1: Option<&str>) -> Option<ParsedToken
     Some(info)
 }
 
+/// Handshake device session using Samsung official sequence
+pub fn handshake_device_session(port_path: &str) -> Result<(), String> {
+    // 1. Channel sync handshake
+    let _ = send_at(port_path, "AT+MGRTCASS=JPSYNC#", 1000);
+    // 2. Status & session preparation
+    let _ = send_at(port_path, "AT+ENGMODES=1,3,1", 800);
+    let _ = send_at(port_path, "AT+ENGMODES=1,1,0", 800);
+    let r_proto = send_at(port_path, "AT+ENGMODES=1,2,0", 1000)
+        .map_err(|e| format!("Negotiation handshake failed: {}", e))?;
+    if !r_proto.contains("OK") {
+        eprintln!("[Token Engine] Handshake 1,2,0 non-standard reply: {}", r_proto.trim());
+    }
+    Ok(())
+}
+
+/// Parse device nonce from modem response wrapped in delimiter (@#)...(@#)
+pub fn parse_device_nonce(res: &str) -> Result<String, String> {
+    if let Some(start_idx) = res.find("(@#)") {
+        let after_start = &res[start_idx + 4..];
+        if let Some(end_idx) = after_start.find("(@#)") {
+            let nonce = after_start[..end_idx].trim();
+            if !nonce.is_empty() {
+                return Ok(nonce.to_string());
+            }
+        }
+    }
+
+    for line in res.lines() {
+        let trimmed = line.trim();
+        if trimmed.contains("REQ-PIT") || trimmed.starts_with("+ENGMODES:0,1,") {
+            let clean = trimmed
+                .replace("REQ-PIT", "")
+                .replace("+ENGMODES:0,1,", "")
+                .replace("(@#)", "")
+                .trim()
+                .to_string();
+            if !clean.is_empty() {
+                return Ok(clean);
+            }
+        }
+    }
+
+    Err(format!("Device did not return a valid nonce payload: {}", res.trim()))
+}
+
+/// Request device nonce from modem via AT+ENGMODES=0,1,
+pub fn acquire_device_nonce(port_path: &str) -> Result<String, String> {
+    let res = send_at(port_path, "AT+ENGMODES=0,1,", 2500)
+        .map_err(|e| format!("Failed to request device nonce: {}", e))?;
+    parse_device_nonce(&res)
+}
+
+/// Inject signed Knox token payload using Samsung REQ-PIK delimiter format: AT+ENGMODES=0,2,(@#)<payload>(@#)
 pub fn inject_signed_token(port_path: &str, signed_payload: &str) -> Result<String, String> {
-    let cmd = format!("AT+ENGMODES=0,0,1,{}", signed_payload);
-    let res = send_at(port_path, &cmd, 3000)?;
-    if res.contains("OK") {
-        Ok("Injected".into())
+    let clean_payload = signed_payload.trim();
+    let cmd = format!("AT+ENGMODES=0,2,(@#){}(@#)", clean_payload);
+    let res = send_at(port_path, &cmd, 5000)?;
+
+    if res.contains("OK") || res.contains("REQ-PIK") || res.contains("Success") {
+        Ok("Token successfully injected to hardware".into())
     } else {
-        Err(format!("HW rejected: {}", res.trim()))
+        Err(format!("Hardware rejected token: {}", res.trim()))
     }
 }
 
+/// Query hardware modem to verify token status directly from TrustZone
+pub fn verify_hardware_token(port_path: &str) -> Result<ParsedTokenInfo, String> {
+    std::thread::sleep(Duration::from_millis(300));
+    if let Some(info) = query_device_token(port_path) {
+        if info.status == "ACTIVE" {
+            return Ok(info);
+        }
+    }
+    Err("Hardware verification failed: token not active after injection".to_string())
+}
 
 #[cfg(test)]
 mod tests {
@@ -323,5 +388,12 @@ mod tests {
         assert_eq!(info.status, "ACTIVE");
         assert_eq!(info.active_modes.len(), 4);
         assert_eq!(info.quotas.len(), 4);
+    }
+
+    #[test]
+    fn test_parse_device_nonce_delimited() {
+        let raw = "\r\nREQ-PIT\r\n(@#)SAMPLE_DEVICE_NONCE_BASE64_9999(@#)\r\n\r\nOK\r\n";
+        let nonce = parse_device_nonce(raw).expect("Should extract nonce");
+        assert_eq!(nonce, "SAMPLE_DEVICE_NONCE_BASE64_9999");
     }
 }

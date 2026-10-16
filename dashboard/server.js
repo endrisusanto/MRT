@@ -153,7 +153,7 @@ app.post('/api/operations', async (req, res) => {
 
 // Proxy token signing request to active Relay Agent
 app.post(['/api/relay/request-token', '/relay/request-token'], async (req, res) => {
-  const { serial, model, modes } = req.body;
+  const { serial, model, modes, device_nonce } = req.body;
   const now = Date.now();
 
   const relayNode = Array.from(nodes.values()).find(
@@ -172,7 +172,7 @@ app.post(['/api/relay/request-token', '/relay/request-token'], async (req, res) 
     const relayRes = await fetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ serial, model, modes })
+      body: JSON.stringify({ serial, model, modes, device_nonce })
     });
 
     const data = await relayRes.json();

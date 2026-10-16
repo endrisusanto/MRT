@@ -5,6 +5,8 @@ pub struct RelayRequest {
     pub serial: String,
     pub model: String,
     pub modes: Vec<i32>,
+    #[serde(default)]
+    pub device_nonce: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,6 +22,7 @@ pub async fn request_signed_token(
     serial: &str,
     model: &str,
     modes: &[i32],
+    device_nonce: Option<&str>,
 ) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(12))
@@ -36,6 +39,7 @@ pub async fn request_signed_token(
         serial: serial.to_string(),
         model: model.to_string(),
         modes: modes.to_vec(),
+        device_nonce: device_nonce.map(|s| s.to_string()),
     };
 
     let res = client
@@ -43,12 +47,21 @@ pub async fn request_signed_token(
         .json(&req)
         .send()
         .await
-        .map_err(|e| format!("Relay agent unreachable ({}): {}", url, e))?;
+        .map_err(|e| format!("Central Hub / Relay tidak dapat dihubungi ({}): {}", url, e))?;
 
     if !res.status().is_success() {
         let status = res.status();
-        let body = res.text().await.unwrap_or_default();
-        return Err(format!("Relay agent returned HTTP {}: {}", status, body));
+        let body_json: serde_json::Value = res.json().await.unwrap_or_default();
+        let err_msg = body_json
+            .get("message")
+            .or_else(|| body_json.get("error"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("Relay menolak permintaan sign token");
+
+        if status == reqwest::StatusCode::SERVICE_UNAVAILABLE || status.as_u16() == 503 {
+            return Err(format!("Tidak ada Relay Agent yang aktif di Central Hub: {}", err_msg));
+        }
+        return Err(format!("Relay error (HTTP {}): {}", status, err_msg));
     }
 
     let body: serde_json::Value = res

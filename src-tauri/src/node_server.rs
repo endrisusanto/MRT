@@ -175,6 +175,38 @@ async fn install_handler(
         lock.iter().find(|d| d.serial == serial).and_then(|d| d.port_name.clone())
     }.or_else(|| crate::device_scanner::find_port_for_serial(&serial));
 
+    let port = match port_opt {
+        Some(p) => p,
+        None => {
+            crate::device_scanner::try_auto_enable_modem(&serial);
+            if let Some(p) = crate::device_scanner::find_port_for_serial(&serial) {
+                p
+            } else {
+                let err_msg = format!("Port modem (/dev/ttyACM*) tidak ditemukan untuk perangkat {}", serial);
+                let event = json!({
+                    "event": "operation_failed",
+                    "task_id": task_id,
+                    "operation": "INSTALL",
+                    "serial": serial,
+                    "status": "FAILED",
+                    "error": err_msg,
+                    "progress": 0
+                });
+                let _ = state.tx.send(event.to_string());
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(OperationResponse {
+                        task_id,
+                        serial,
+                        status: "FAILED".to_string(),
+                        progress: 0,
+                        message: err_msg,
+                    }),
+                );
+            }
+        }
+    };
+
     // 2. Query device model
     let model = {
         let lock = state.cached_devices.lock().unwrap();
@@ -184,45 +216,165 @@ async fn install_handler(
             .unwrap_or_else(|| "Samsung Mobile Device".to_string())
     };
 
-    // 3. Request signed token from Relay Agent (or route via Central Hub) and inject into hardware
-    let mut hw_injected = false;
-    let is_relay = state.auth_manager.is_relay();
-
-    if let Some(ref port) = port_opt {
-        let modes_vec: Vec<i32> = selected_indices.clone().unwrap_or_else(|| vec![0, 1, 12, 49]);
-
-        if is_relay {
-            // Local Relay Agent: directly execute AT command / local inject
-            let _ = crate::token_engine::send_at(port, "AT+ENGMODES=1,1,0", 800);
-            hw_injected = true;
-        } else {
-            // Workstation Client: route token sign request through Central Hub
-            let hub_url = std::env::var("MRT_HUB_URL")
-                .unwrap_or_else(|_| "https://mrt.endrisusanto.my.id".to_string());
-            match crate::relay_client::request_signed_token(&hub_url, &serial, &model, &modes_vec).await {
-                Ok(payload) => {
-                    match crate::token_engine::inject_signed_token(port, &payload) {
-                        Ok(_) => {
-                            hw_injected = true;
-                        }
-                        Err(e) => {
-                            eprintln!("[Relay] Hardware injection failed: {}", e);
-                            let _ = crate::token_engine::send_at(port, "AT+ENGMODES=1,1,0", 800);
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("[Station] Relay via Central Hub unavailable ({}), fallback to AT+ENGMODES", e);
-                    let _ = crate::token_engine::send_at(port, "AT+ENGMODES=1,1,0", 800);
-                }
-            }
-        }
+    // 3. Handshake session with modem
+    if let Err(e) = crate::token_engine::handshake_device_session(&port) {
+        let err_msg = format!("Handshake sesi modem gagal di {}: {}", port, e);
+        let event = json!({
+            "event": "operation_failed",
+            "task_id": task_id,
+            "operation": "INSTALL",
+            "serial": serial,
+            "status": "FAILED",
+            "error": err_msg,
+            "progress": 0
+        });
+        let _ = state.tx.send(event.to_string());
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(OperationResponse {
+                task_id,
+                serial,
+                status: "FAILED".to_string(),
+                progress: 0,
+                message: err_msg,
+            }),
+        );
     }
 
-    // 4. Register standalone token with 90 days validity
+    // 4. Acquire device nonce (REQ-PIT)
+    let device_nonce = match crate::token_engine::acquire_device_nonce(&port) {
+        Ok(nonce) => nonce,
+        Err(e) => {
+            let err_msg = format!("Gagal membaca Device Nonce (REQ-PIT) dari modem {}: {}", port, e);
+            let event = json!({
+                "event": "operation_failed",
+                "task_id": task_id,
+                "operation": "INSTALL",
+                "serial": serial,
+                "status": "FAILED",
+                "error": err_msg,
+                "progress": 0
+            });
+            let _ = state.tx.send(event.to_string());
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(OperationResponse {
+                    task_id,
+                    serial,
+                    status: "FAILED".to_string(),
+                    progress: 0,
+                    message: err_msg,
+                }),
+            );
+        }
+    };
+
+    // 5. Request signed token from Relay Agent (or direct if this node is Relay)
+    let modes_vec: Vec<i32> = selected_indices.clone().unwrap_or_else(|| vec![0, 1, 12, 49]);
+    let is_relay = state.auth_manager.is_relay();
+
+    let signed_payload: String = if is_relay {
+        let auth_status = state.auth_manager.get_status();
+        if !auth_status.authenticated {
+            let err_msg = "Eksekusi tidak dapat diproses: Relay Agent lokal belum terautentikasi SSO Samsung".to_string();
+            let event = json!({
+                "event": "operation_failed",
+                "task_id": task_id,
+                "operation": "INSTALL",
+                "serial": serial,
+                "status": "FAILED",
+                "error": err_msg,
+                "progress": 0
+            });
+            let _ = state.tx.send(event.to_string());
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(OperationResponse {
+                    task_id,
+                    serial,
+                    status: "FAILED".to_string(),
+                    progress: 0,
+                    message: err_msg,
+                }),
+            );
+        }
+        format!("eTokenB64_{}_{}_{}", serial, device_nonce, chrono::Utc::now().timestamp())
+    } else {
+        let hub_url = std::env::var("MRT_HUB_URL")
+            .unwrap_or_else(|_| "https://mrt.endrisusanto.my.id".to_string());
+
+        match crate::relay_client::request_signed_token(
+            &hub_url,
+            &serial,
+            &model,
+            &modes_vec,
+            Some(&device_nonce),
+        ).await {
+            Ok(payload) => payload,
+            Err(e) => {
+                eprintln!("[Station] Strict failure: Relay Agent unavailable: {}", e);
+                let err_msg = "Eksekusi tidak dapat diproses: Workstation berada di luar intranet Samsung dan tidak ada Relay Agent yang aktif di Central Hub".to_string();
+                let event = json!({
+                    "event": "operation_failed",
+                    "task_id": task_id,
+                    "operation": "INSTALL",
+                    "serial": serial,
+                    "status": "FAILED",
+                    "error": err_msg,
+                    "progress": 0
+                });
+                let _ = state.tx.send(event.to_string());
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(OperationResponse {
+                        task_id,
+                        serial,
+                        status: "FAILED".to_string(),
+                        progress: 0,
+                        message: err_msg,
+                    }),
+                );
+            }
+        }
+    };
+
+    // 6. Inject signed token into hardware (REQ-PIK)
+    if let Err(e) = crate::token_engine::inject_signed_token(&port, &signed_payload) {
+        let err_msg = format!("Injeksi token hardware (REQ-PIK) gagal pada modem {}: {}", port, e);
+        let event = json!({
+            "event": "operation_failed",
+            "task_id": task_id,
+            "operation": "INSTALL",
+            "serial": serial,
+            "status": "FAILED",
+            "error": err_msg,
+            "progress": 0
+        });
+        let _ = state.tx.send(event.to_string());
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(OperationResponse {
+                task_id,
+                serial,
+                status: "FAILED".to_string(),
+                progress: 0,
+                message: err_msg,
+            }),
+        );
+    }
+
+    // 7. Verify hardware TrustZone token status (AT+ENGMODES=9,0)
+    let hw_info = match crate::token_engine::verify_hardware_token(&port) {
+        Ok(info) => Some(info),
+        Err(e) => {
+            eprintln!("[Hardware] Verifikasi AT+ENGMODES=9,0 (non-fatal): {}", e);
+            None
+        }
+    };
+
+    // 8. Register installed token and update in-memory cache
     let stored = crate::token_engine::register_installed_token(&serial, &model, 90, selected_indices);
 
-    // 5. Update in-memory cached devices so next read immediately shows ACTIVE
     {
         let mut lock = state.cached_devices.lock().unwrap();
         if let Some(dev) = lock.iter_mut().find(|d| d.serial == serial) {
@@ -232,13 +384,21 @@ async fn install_handler(
             dev.active_modes = stored.active_modes.clone();
             dev.mode_quotas = stored.quotas.clone();
             dev.agent_status = "INSTALLED".to_string();
+            if let Some(h) = hw_info {
+                if h.owner.is_some() {
+                    dev.token_owner = h.owner;
+                }
+                if h.expires.is_some() {
+                    dev.token_expires = h.expires;
+                }
+            }
             if dev.model.is_empty() || dev.model.contains("Android") {
                 dev.model = model;
             }
         }
     }
 
-    // 6. Broadcast completion event via websocket
+    // 9. Broadcast completion event via websocket
     let event = json!({
         "event": "operation_completed",
         "task_id": task_id,
@@ -246,16 +406,12 @@ async fn install_handler(
         "serial": serial,
         "status": "COMPLETED",
         "token_expires": stored.expires,
-        "hw_injected": hw_injected,
+        "hw_injected": true,
         "progress": 100
     });
     let _ = state.tx.send(event.to_string());
 
-    let message = if hw_injected {
-        format!("Token disuntikkan ke hardware via relay. Expired: {}", stored.expires)
-    } else {
-        format!("Token mode berhasil dipasang. Expired: {} (90 hari)", stored.expires)
-    };
+    let message = format!("Hardware token berhasil disuntikkan ke modem TrustZone. Expired: {}", stored.expires);
 
     let res = OperationResponse {
         task_id,
@@ -482,6 +638,7 @@ async fn relay_request_token_handler(
 ) -> impl IntoResponse {
     let serial = body.get("serial").and_then(|v| v.as_str()).unwrap_or("");
     let model = body.get("model").and_then(|v| v.as_str()).unwrap_or("");
+    let device_nonce = body.get("device_nonce").and_then(|v| v.as_str()).unwrap_or("");
 
     // Check if session is authenticated
     let session_status = state.auth_manager.get_status();
@@ -503,7 +660,8 @@ async fn relay_request_token_handler(
 
     let is_authenticated = state.auth_manager.get_status().authenticated;
     if is_authenticated {
-        let payload = format!("eTokenB64_{}_{}", serial, chrono::Utc::now().timestamp());
+        let nonce_part = if device_nonce.is_empty() { "NONE" } else { device_nonce };
+        let payload = format!("eTokenB64_{}_{}_{}", serial, nonce_part, chrono::Utc::now().timestamp());
         (
             StatusCode::OK,
             Json(json!({
