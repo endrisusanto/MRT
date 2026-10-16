@@ -143,10 +143,10 @@ git push "$REMOTE" "HEAD:$BRANCH" || true
 echo "[Release] Pushing tag $NEXT_TAG to trigger GitHub Actions build..."
 git push "$REMOTE" "$NEXT_TAG" || true
 
-# If gh cli is authenticated, publish/update GitHub Release notes
+# If gh cli is authenticated, publish/update GitHub Release notes with only the target version deb
 if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
   echo "[Release] Updating GitHub Release notes via gh CLI..."
-  gh release create "$NEXT_TAG" dist/mrt-station_*_amd64.deb \
+  gh release create "$NEXT_TAG" "dist/mrt-station_${NEXT_VERSION}_amd64.deb" \
     --title "MRT Station $NEXT_TAG" \
     --notes "$COMMIT_MESSAGE" \
     --verify-tag || gh release edit "$NEXT_TAG" --notes "$COMMIT_MESSAGE" || true
