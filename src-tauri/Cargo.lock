@@ -2397,7 +2397,7 @@ dependencies = [
 
 [[package]]
 name = "mrt-station"
-version = "2.1.8"
+version = "2.1.9"
 dependencies = [
  "axum",
  "chrono",

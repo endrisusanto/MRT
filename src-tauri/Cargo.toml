@@ -1,6 +1,6 @@
 [package]
 name = "mrt-station"
-version = "2.1.8"
+version = "2.1.9"
 description = "Samsung EM Station Modernized Node Agent"
 authors = ["MRT Team"]
 edition = "2021"
