@@ -246,6 +246,7 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
                 token_expires: None,
                 active_modes: Vec::new(),
                 mode_quotas: Vec::new(),
+                hw_verified: false,
             });
         }
     }
@@ -340,6 +341,7 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
                         token_expires: None,
                         active_modes: Vec::new(),
                         mode_quotas: Vec::new(),
+                        hw_verified: false,
                     });
                 }
             }
@@ -373,6 +375,7 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
                 token_expires: None,
                 active_modes: Vec::new(),
                 mode_quotas: Vec::new(),
+                hw_verified: false,
             });
         }
     }
@@ -418,6 +421,7 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
                         token_expires: None,
                         active_modes: Vec::new(),
                         mode_quotas: Vec::new(),
+                        hw_verified: false,
                     });
                 }
             }
@@ -434,16 +438,17 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
         }
 
         if let Some(tok_info) = hardware_token {
+            // ponytail: hardware modem confirmed token presence in TrustZone
             dev.token_status = Some(tok_info.status.clone());
             dev.token_owner = tok_info.owner.clone();
             dev.token_expires = tok_info.expires.clone();
             dev.active_modes = tok_info.active_modes.clone();
             dev.mode_quotas = tok_info.quotas.clone();
             dev.agent_status = "INSTALLED".to_string();
+            dev.hw_verified = true;
             if let Some(m) = tok_info.model.clone() {
                 dev.model = m;
             }
-            // Update stored token cache with hardware truth
             let _ = token_engine::save_token_to_store(&token_engine::StoredToken {
                 serial: dev.serial.clone(),
                 token_id: tok_info.token_id.unwrap_or_default(),
@@ -455,19 +460,16 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
                 active_modes: dev.active_modes.clone(),
                 quotas: dev.mode_quotas.clone(),
             });
-        } else if let Some(stored) = stored_tokens.get(&dev.serial) {
-            dev.token_status = Some(stored.status.clone());
-            dev.token_owner = Some(stored.owner.clone());
-            dev.token_expires = Some(stored.expires.clone());
-            dev.active_modes = stored.active_modes.clone();
-            dev.mode_quotas = stored.quotas.clone();
-            dev.agent_status = "INSTALLED".to_string();
-            if dev.model.is_empty() || dev.model.contains("Android") {
-                dev.model = stored.model.clone();
-            }
         } else {
+            // ponytail: solid status - only hardware modem confirmation counts as installed (no cache fallback)
+            if dev.model.is_empty() || dev.model.contains("Android") {
+                if let Some(stored) = stored_tokens.get(&dev.serial) {
+                    dev.model = stored.model.clone();
+                }
+            }
             dev.token_status = Some("NONE".to_string());
             dev.agent_status = "NOT_INSTALLED".to_string();
+            dev.hw_verified = false;
         }
     }
 

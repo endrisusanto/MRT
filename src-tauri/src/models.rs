@@ -16,6 +16,8 @@ pub struct DeviceInfo {
     pub token_expires: Option<String>,  // e.g. "2026-11-28"
     pub active_modes: Vec<String>,      // e.g. ["MODE_ENG_KERNEL", "MODE_INIT_EM", "MODE_ACCESS_SOD", "MODE_EXTRACT_RAM_DUMP"]
     pub mode_quotas: Vec<ModeQuota>,
+    #[serde(default)]
+    pub hw_verified: bool,              // true = confirmed by hardware modem AT query, false = software cache only
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -396,4 +396,31 @@ mod tests {
         let nonce = parse_device_nonce(raw).expect("Should extract nonce");
         assert_eq!(nonce, "SAMPLE_DEVICE_NONCE_BASE64_9999");
     }
+
+    #[test]
+    #[ignore]
+    fn test_diag_handshake() {
+        let port = "/dev/ttyACM6";
+        println!("=== STEP BY STEP DIAGNOSTIC ON {} ===", port);
+        for cmd in &[
+            "AT",
+            "AT+MGRTCASS=JPSYNC#",
+            "AT+DEVCONINFO",
+            "AT+ENGMODES=?",
+            "AT+ENGMODES=1,?",
+            "AT+ENGMODES=0,?",
+            "AT+ENGMODES=9,0",
+            "AT+ENGMODES=1,3,1",
+            "AT+ENGMODES=1,1,0",
+            "AT+ENGMODES=1,2,0",
+            "AT+ENGMODES=0,1",
+            "AT+ENGMODES=0,1,",
+            "AT+ENGMODES=0,1,0",
+            "AT+ENGMODES=0,1,1",
+        ] {
+            let res = send_at(port, cmd, 1000);
+            println!("CMD [{}] => {:?}", cmd, res);
+            std::thread::sleep(Duration::from_millis(150));
+        }
+    }
 }

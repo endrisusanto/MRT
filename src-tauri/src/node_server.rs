@@ -245,7 +245,17 @@ async fn install_handler(
     let device_nonce = match crate::token_engine::acquire_device_nonce(&port) {
         Ok(nonce) => nonce,
         Err(e) => {
-            let err_msg = format!("Gagal membaca Device Nonce (REQ-PIT) dari modem {}: {}", port, e);
+            // ponytail: extract modem error code for diagnostics
+            let error_code = e.split("ERROR_INTERNAL,").nth(1)
+                .or_else(|| e.split("NG,").nth(1))
+                .map(|s| s.trim().split_whitespace().next().unwrap_or(""))
+                .unwrap_or("");
+            let hint = match error_code {
+                s if s.starts_with("F048") => " (TrustZone SE terkunci / belum diinisialisasi)",
+                s if s.starts_with("F075") => " (Hardware keystore kosong)",
+                _ => "",
+            };
+            let err_msg = format!("Gagal membaca Device Nonce (REQ-PIT) dari modem {}: {}{}", port, e, hint);
             let event = json!({
                 "event": "operation_failed",
                 "task_id": task_id,
@@ -253,6 +263,7 @@ async fn install_handler(
                 "serial": serial,
                 "status": "FAILED",
                 "error": err_msg,
+                "error_code": error_code,
                 "progress": 0
             });
             let _ = state.tx.send(event.to_string());
@@ -365,33 +376,46 @@ async fn install_handler(
 
     // 7. Verify hardware TrustZone token status (AT+ENGMODES=9,0)
     let hw_info = match crate::token_engine::verify_hardware_token(&port) {
-        Ok(info) => Some(info),
+        Ok(info) => info,
         Err(e) => {
-            eprintln!("[Hardware] Verifikasi AT+ENGMODES=9,0 (non-fatal): {}", e);
-            None
+            let err_msg = format!("Injeksi token dikirim ke port {} namun verifikasi hardware TrustZone (AT+ENGMODES=9,0) gagal: {}", port, e);
+            eprintln!("[Hardware] {}", err_msg);
+            let event = json!({
+                "event": "operation_failed",
+                "task_id": task_id,
+                "operation": "INSTALL",
+                "serial": serial,
+                "status": "FAILED",
+                "error": err_msg,
+                "progress": 0
+            });
+            let _ = state.tx.send(event.to_string());
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(OperationResponse {
+                    task_id,
+                    serial,
+                    status: "FAILED".to_string(),
+                    progress: 0,
+                    message: err_msg,
+                }),
+            );
         }
     };
 
-    // 8. Register installed token and update in-memory cache
+    // 8. Register installed token and update in-memory cache (only on verified hardware success)
     let stored = crate::token_engine::register_installed_token(&serial, &model, 90, selected_indices);
 
     {
         let mut lock = state.cached_devices.lock().unwrap();
         if let Some(dev) = lock.iter_mut().find(|d| d.serial == serial) {
             dev.token_status = Some("ACTIVE".to_string());
-            dev.token_owner = Some(stored.owner.clone());
-            dev.token_expires = Some(stored.expires.clone());
+            dev.token_owner = hw_info.owner.or(Some(stored.owner.clone()));
+            dev.token_expires = hw_info.expires.or(Some(stored.expires.clone()));
             dev.active_modes = stored.active_modes.clone();
             dev.mode_quotas = stored.quotas.clone();
             dev.agent_status = "INSTALLED".to_string();
-            if let Some(h) = hw_info {
-                if h.owner.is_some() {
-                    dev.token_owner = h.owner;
-                }
-                if h.expires.is_some() {
-                    dev.token_expires = h.expires;
-                }
-            }
+            dev.hw_verified = true;
             if dev.model.is_empty() || dev.model.contains("Android") {
                 dev.model = model;
             }
@@ -411,7 +435,7 @@ async fn install_handler(
     });
     let _ = state.tx.send(event.to_string());
 
-    let message = format!("Hardware token berhasil disuntikkan ke modem TrustZone. Expired: {}", stored.expires);
+    let message = format!("Token berhasil disuntikkan dan terverifikasi di hardware TrustZone. Expired: {}", stored.expires);
 
     let res = OperationResponse {
         task_id,

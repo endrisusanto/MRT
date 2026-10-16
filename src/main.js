@@ -330,7 +330,8 @@
   }
 
   function updateStats() {
-    const activeTokens = allDevices.filter(d => d.token_status === 'ACTIVE').length;
+    // ponytail: solid status - only hardware-verified active tokens count
+    const activeTokens = allDevices.filter(d => d.token_status === 'ACTIVE' && Boolean(d.hw_verified)).length;
 
     if (statPillNodes) statPillNodes.textContent = allNodes.length || 1;
     if (statPillDevices) statPillDevices.textContent = allDevices.length;
@@ -354,7 +355,7 @@
           modelStats[d.model] = { count: 0, active: 0, none: 0 };
         }
         modelStats[d.model].count += 1;
-        if (d.token_status === 'ACTIVE') {
+        if (d.token_status === 'ACTIVE' && Boolean(d.hw_verified)) {
           modelStats[d.model].active += 1;
         } else {
           modelStats[d.model].none += 1;
@@ -477,17 +478,30 @@
     if (fleetTableContainer) fleetTableContainer.style.display = 'block';
     fleetTableBody.innerHTML = filtered.map(d => {
       const isSelected = selectedSerials.has(d.serial);
-      const isTokenActive = d.token_status === 'ACTIVE';
+      const hwVerified = Boolean(d.hw_verified);
+      const isTokenActive = d.token_status === 'ACTIVE' && hwVerified;
       const progress = deviceProgress[d.serial];
 
-      // Active mode badges
-      const activeModes = d.active_modes || [];
+      // Active mode badges (only displayed if confirmed active in TrustZone)
+      const activeModes = isTokenActive ? (d.active_modes || []) : [];
       const badges = [];
       if (activeModes.some(m => m.includes('ENG_KERNEL'))) badges.push('<span class="mini-mode-badge badge-eng">ENG</span>');
       if (activeModes.some(m => m.includes('INIT_EM'))) badges.push('<span class="mini-mode-badge badge-em">EM</span>');
       if (activeModes.some(m => m.includes('ACCESS_SOD'))) badges.push('<span class="mini-mode-badge badge-sod">SOD</span>');
       if (activeModes.some(m => m.includes('RAM_DUMP'))) badges.push('<span class="mini-mode-badge badge-dump">DUMP</span>');
       const modesHtml = badges.length > 0 ? badges.join('') : '<span style="color:var(--color-text-muted);font-size:10px;">None</span>';
+
+      // HW Verification badge (Solid: HW OK or UNVERIFIED, no cache)
+      let hwBadgeHtml;
+      if (isTokenActive && hwVerified) {
+        hwBadgeHtml = `<span class="token-status-pill active" style="font-size:10px;padding:2px 8px;" title="Token dikonfirmasi langsung dari modem hardware TrustZone">
+          <svg class="badge-icon"><use href="#icon-check-circle"></use></svg> HW OK
+        </span>`;
+      } else {
+        hwBadgeHtml = `<span class="token-status-pill none" style="font-size:10px;padding:2px 8px;" title="Belum terpasang di hardware modem">
+          <svg class="badge-icon"><use href="#icon-x-circle"></use></svg> UNVERIFIED
+        </span>`;
+      }
 
       // Token status badge with icon (same uniform width)
       let statusHtml = `
@@ -532,7 +546,7 @@
         `;
         progressBarRowHtml = `
           <tr class="device-progress-track-row" data-serial="${escapeHtml(d.serial)}">
-            <td colspan="8" class="device-progress-track-cell">
+            <td colspan="9" class="device-progress-track-cell">
               <div class="device-progress-fill-bar" style="width: ${pct}%;"></div>
             </td>
           </tr>
@@ -550,6 +564,7 @@
             <span class="device-serial">${escapeHtml(d.serial)}</span>
           </td>
           <td style="text-align: center;">${statusHtml}</td>
+          <td style="text-align: center;">${hwBadgeHtml}</td>
           <td>${expireHtml}</td>
           <td><div class="active-mode-badges">${modesHtml}</div></td>
           <td style="text-align: right;">
@@ -686,7 +701,8 @@
         } else {
           const err = await res.json().catch(() => ({}));
           setDeviceProgress(serial, 100, 'Failed');
-          addLog(serial, 'ERROR', `Instalasi gagal: ${err.message || 'Command rejected'}`);
+          const errCode = err.error_code ? ` [${err.error_code}]` : '';
+          addLog(serial, 'ERROR', `Instalasi gagal${errCode}: ${err.message || 'Command rejected'}`);
           showToast(`Gagal di ${serial}: ${err.message || 'Error'}`, 'error');
         }
       } catch (e) {
