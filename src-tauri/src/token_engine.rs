@@ -347,11 +347,24 @@ pub fn query_pss_status(port_path: &str) -> Result<String, String> {
     crate::kms_flow::extract_pss_payload(&res)
 }
 
-/// Request device nonce from modem with PPC challenge hash (AT+ENGMODES=0,1,<hash>)
-pub fn acquire_device_nonce_with_challenge(port_path: &str, ppc_hash: &str) -> Result<String, String> {
-    let cmd = format!("AT+ENGMODES=0,1,{}", ppc_hash.trim());
-    let res = send_at(port_path, &cmd, 3500)
+/// Request device nonce from modem with PPC challenge command (AT+ENGMODES=0,1,...)
+pub fn acquire_device_nonce_with_challenge(port_path: &str, challenge_cmd_or_hash: &str) -> Result<String, String> {
+    let cmd = if challenge_cmd_or_hash.starts_with("AT+ENGMODES=0,1,") {
+        challenge_cmd_or_hash.trim().to_string()
+    } else {
+        format!("AT+ENGMODES=0,1,{}", challenge_cmd_or_hash.trim())
+    };
+    let res = send_at(port_path, &cmd, 5000)
         .map_err(|e| format!("Gagal mengirim AT+ENGMODES=0,1 challenge: {}", e))?;
+
+    if res.contains("ERROR_INTERNAL") || res.contains("NG") {
+        return Err(format!("Device did not return a valid nonce payload: {}", res.trim()));
+    }
+
+    if res.contains("+ENGMODES:0,OK:") || (res.contains("OK") && res.contains(':')) {
+        return Ok(res);
+    }
+
     parse_device_nonce(&res)
 }
 
@@ -433,23 +446,37 @@ mod tests {
     #[test]
     #[ignore]
     fn test_diag_handshake() {
-        let port = "/dev/ttyACM6";
+        let port = "/dev/ttyACM1";
         println!("=== STEP BY STEP DIAGNOSTIC ON {} ===", port);
+        let _ = send_at(port, "AT", 500);
+        let r_sync = send_at(port, "AT+MGRTCASS=JPSYNC#", 1000);
+        println!("CMD [AT+MGRTCASS=JPSYNC#] => {:?}", r_sync);
+        let r_pss = send_at(port, "AT+ENGMODES=1,3,1", 1000);
+        println!("CMD [AT+ENGMODES=1,3,1] => {:?}", r_pss);
+        let r_tok = send_at(port, "AT+ENGMODES=1,1,0", 1000);
+        println!("CMD [AT+ENGMODES=1,1,0] => {:?}", r_tok);
+        let r_proto = send_at(port, "AT+ENGMODES=1,2,0", 1000);
+        println!("CMD [AT+ENGMODES=1,2,0] => {:?}", r_proto);
+        
+        let pss = r_pss.unwrap_or_default();
+        let pss_clean = crate::kms_flow::extract_pss_payload(&pss).unwrap_or(pss.clone());
+        println!("PSS CLEAN: {:?}", pss_clean);
+
+        // Dummy/sample KMS cert
+        let cert = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA";
+        if let Ok(hash) = crate::kms_flow::compute_ppc_hash(&pss_clean, cert) {
+            println!("COMPUTED PPC HASH: {:?}", hash);
+            let cmd_challenge = format!("AT+ENGMODES=0,1,{}", hash);
+            let r_challenge = send_at(port, &cmd_challenge, 3000);
+            println!("CMD [{}] => {:?}", cmd_challenge, r_challenge);
+        }
+
         for cmd in &[
-            "AT",
-            "AT+MGRTCASS=JPSYNC#",
-            "AT+DEVCONINFO",
-            "AT+ENGMODES=?",
-            "AT+ENGMODES=1,?",
-            "AT+ENGMODES=0,?",
-            "AT+ENGMODES=9,0",
-            "AT+ENGMODES=1,3,1",
-            "AT+ENGMODES=1,1,0",
-            "AT+ENGMODES=1,2,0",
             "AT+ENGMODES=0,1",
             "AT+ENGMODES=0,1,",
             "AT+ENGMODES=0,1,0",
             "AT+ENGMODES=0,1,1",
+            "AT+ENGMODES=0,1,(@#)REQ-PIT(@#)",
         ] {
             let res = send_at(port, cmd, 1000);
             println!("CMD [{}] => {:?}", cmd, res);

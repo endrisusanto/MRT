@@ -43,10 +43,12 @@ pub async fn is_relay_active_on_hub(hub_url: &str) -> Result<bool, String> {
     Ok(has_relay)
 }
 
-/// Request PPC challenge hash from Relay Agent via Central Hub
+/// Request PPC challenge command from Relay Agent via Central Hub
 pub async fn request_ppc_challenge(
     hub_url: &str,
     pss_payload: &str,
+    modes: &[i32],
+    user_id: &str,
 ) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
@@ -56,7 +58,11 @@ pub async fn request_ppc_challenge(
     let url = format!("{}/api/relay/ppc-challenge", hub_url.trim_end_matches('/'));
     let res = client
         .post(&url)
-        .json(&serde_json::json!({ "pss_payload": pss_payload }))
+        .json(&serde_json::json!({
+            "pss_payload": pss_payload,
+            "modes": modes,
+            "user_id": user_id,
+        }))
         .send()
         .await
         .map_err(|e| format!("Gagal menghubungi Relay untuk PPC challenge ({}): {}", url, e))?;
@@ -74,10 +80,22 @@ pub async fn request_ppc_challenge(
     let body: serde_json::Value = res.json().await
         .map_err(|e| format!("Invalid JSON response for PPC challenge: {}", e))?;
 
+    if let Some(cmd) = body.get("challenge_cmd").and_then(|v| v.as_str()) {
+        if !cmd.is_empty() {
+            return Ok(cmd.to_string());
+        }
+    }
+
+    if let Some(cert_b64) = body.get("cert_b64").and_then(|v| v.as_str()) {
+        if !cert_b64.is_empty() {
+            return crate::kms_flow::construct_pit_challenge_command(cert_b64, modes, user_id, None);
+        }
+    }
+
     body.get("ppc_hash")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
-        .ok_or_else(|| "Respons Relay Agent tidak menyertakan ppc_hash".to_string())
+        .ok_or_else(|| "Respons Relay Agent tidak menyertakan challenge_cmd atau ppc_hash".to_string())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

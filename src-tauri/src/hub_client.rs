@@ -71,37 +71,65 @@ async fn execute_relay_task(
     match task_type {
         "PPC_CHALLENGE" => {
             let pss_payload = payload.get("pss_payload").and_then(|v| v.as_str()).unwrap_or("");
-            let cid = format!("MRT-PPC-{}", uuid::Uuid::new_v4().to_string().replace("-", ""));
+            let cid = if !pss_payload.is_empty() {
+                crate::kms_flow::extract_pss_cid(pss_payload)
+            } else {
+                format!("MRT-PPC-{}", uuid::Uuid::new_v4().to_string().replace("-", ""))
+            };
 
-            let cert_b64 = match crate::kms_flow::request_kms_ppc(&kms_url, &cid, &ip, "00:00:00:00:00:00").await {
-                Ok(res) => res.cert_b64.unwrap_or_default(),
+            let ppc_res = match crate::kms_flow::request_kms_ppc(&kms_url, &cid, &ip, "000000000000").await {
+                Ok(res) => res,
                 Err(e) => {
-                    eprintln!("[Relay Worker] REQ-PPC warning: {}", e);
-                    "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA".to_string()
+                    eprintln!("[Relay Worker] REQ-PPC failed: {}", e);
+                    return serde_json::json!({
+                        "success": false,
+                        "error": format!("KMS REQ-PPC gagal di Relay Agent: {}", e)
+                    });
                 }
             };
 
-            match crate::kms_flow::compute_ppc_hash(pss_payload, &cert_b64) {
-                Ok(hash) => serde_json::json!({
+            let cert_b64 = match ppc_res.cert_b64 {
+                Some(c) if !c.is_empty() => c,
+                _ => {
+                    return serde_json::json!({
+                        "success": false,
+                        "error": format!("KMS REQ-PPC ditolak server Samsung dengan retCode: {}", ppc_res.ret_code)
+                    });
+                }
+            };
+
+            let modes: Vec<i32> = payload.get("modes")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|x| x.as_i64().map(|n| n as i32)).collect())
+                .unwrap_or_else(|| vec![0, 1, 12, 49]);
+            let user_id = payload.get("user_id").and_then(|v| v.as_str()).unwrap_or("endri.s");
+
+            match crate::kms_flow::construct_pit_challenge_command(&cert_b64, &modes, user_id, None) {
+                Ok(cmd) => serde_json::json!({
                     "success": true,
-                    "ppc_hash": hash,
+                    "challenge_cmd": cmd,
+                    "cert_b64": cert_b64,
                     "cert_len": cert_b64.len()
                 }),
                 Err(e) => serde_json::json!({
                     "success": false,
-                    "error": e
+                    "error": format!("Gagal menyusun perintah challenge PPC: {}", e)
                 }),
             }
         }
         "REQUEST_TOKEN" => {
             let serial = payload.get("serial").and_then(|v| v.as_str()).unwrap_or("");
             let model = payload.get("model").and_then(|v| v.as_str()).unwrap_or("");
-            let device_nonce = payload.get("device_nonce").and_then(|v| v.as_str()).unwrap_or("");
-            let modes: Vec<i32> = payload
-                .get("modes")
-                .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|m| m.as_i64().map(|i| i as i32)).collect())
-                .unwrap_or_else(|| vec![0, 1, 12, 49]);
+            let raw_nonce = payload.get("device_nonce").and_then(|v| v.as_str()).unwrap_or("");
+            let nonce_obj = match crate::kms_flow::parse_modem_pit_response(raw_nonce) {
+                Ok(n) => n,
+                Err(e) => {
+                    return serde_json::json!({
+                        "success": false,
+                        "error": format!("Payload Device Nonce tidak valid: {}", e)
+                    });
+                }
+            };
 
             let auth_status = auth_manager.get_status();
             let ad_token = auth_status.username.unwrap_or_else(|| "endri.s".to_string());
@@ -110,13 +138,10 @@ async fn execute_relay_task(
             match crate::kms_flow::request_kms_pit(
                 &kms_url,
                 &ad_token,
-                serial,
-                model,
-                &modes,
-                device_nonce,
+                &nonce_obj,
                 &cid,
                 &ip,
-                "00:00:00:00:00:00",
+                "000000000000",
             ).await {
                 Ok(pit_res) => {
                     serde_json::json!({
@@ -129,15 +154,10 @@ async fn execute_relay_task(
                     })
                 }
                 Err(e) => {
-                    eprintln!("[Relay Worker] REQ-PIT notice: {}", e);
-                    let fallback_payload = format!("eTokenB64_{}_{}_{}", serial, device_nonce, chrono::Utc::now().timestamp());
+                    eprintln!("[Relay Worker] REQ-PIT error: {}", e);
                     serde_json::json!({
-                        "success": true,
-                        "serial": serial,
-                        "model": model,
-                        "signed_payload": fallback_payload,
-                        "rxss_iv": Some("AAAAAAAAAAAAAAAAAAAAAA==".to_string()),
-                        "message": format!("Token generated (notice: {})", e)
+                        "success": false,
+                        "error": format!("KMS REQ-PIT gagal: {}", e)
                     })
                 }
             }
