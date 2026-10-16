@@ -1,6 +1,7 @@
 pub mod auth_manager;
 pub mod device_scanner;
 pub mod hub_client;
+pub mod kms_flow;
 pub mod models;
 pub mod node_server;
 pub mod relay_client;

@@ -151,6 +151,78 @@ app.post('/api/operations', async (req, res) => {
   }
 });
 
+// Reverse Task Queue for Relay Agents behind NAT
+const pendingTasks = new Map();
+const waitingPollers = [];
+
+function dispatchTask(type, payload, timeoutMs = 25000) {
+  return new Promise((resolve, reject) => {
+    const taskId = 'task-' + Math.random().toString(36).substring(2, 10);
+    const timer = setTimeout(() => {
+      pendingTasks.delete(taskId);
+      reject(new Error('Relay Agent did not respond in time (timeout)'));
+    }, timeoutMs);
+
+    pendingTasks.set(taskId, { type, payload, resolve, reject, timer, assigned: false });
+
+    // Answer poller immediately if waiting
+    if (waitingPollers.length > 0) {
+      const pollerRes = waitingPollers.shift();
+      pollerRes.json([{ id: taskId, type, payload }]);
+    }
+  });
+}
+
+// Polling endpoint for Relay Agents behind NAT
+app.get('/api/relay/poll', (req, res) => {
+  const tasksToSend = [];
+  for (const [id, entry] of pendingTasks.entries()) {
+    if (!entry.assigned) {
+      entry.assigned = true;
+      tasksToSend.push({ id, type: entry.type, payload: entry.payload });
+    }
+  }
+
+  if (tasksToSend.length > 0) {
+    return res.json(tasksToSend);
+  }
+
+  // Long poll for up to 25 seconds
+  const timer = setTimeout(() => {
+    const idx = waitingPollers.indexOf(res);
+    if (idx !== -1) waitingPollers.splice(idx, 1);
+    res.json([]);
+  }, 25000);
+
+  res.on('close', () => {
+    clearTimeout(timer);
+    const idx = waitingPollers.indexOf(res);
+    if (idx !== -1) waitingPollers.splice(idx, 1);
+  });
+
+  waitingPollers.push(res);
+});
+
+// Completion endpoint for Relay Agents
+app.post('/api/relay/complete', (req, res) => {
+  const { taskId, result, error } = req.body;
+  if (!taskId || !pendingTasks.has(taskId)) {
+    return res.status(404).json({ error: 'Task not found or expired' });
+  }
+
+  const { resolve, reject, timer } = pendingTasks.get(taskId);
+  clearTimeout(timer);
+  pendingTasks.delete(taskId);
+
+  if (error) {
+    reject(new Error(error));
+  } else {
+    resolve(result);
+  }
+
+  res.json({ success: true });
+});
+
 // Proxy token signing request to active Relay Agent
 app.post(['/api/relay/request-token', '/relay/request-token'], async (req, res) => {
   const { serial, model, modes, device_nonce } = req.body;
@@ -167,19 +239,81 @@ app.post(['/api/relay/request-token', '/relay/request-token'], async (req, res) 
     });
   }
 
+  // 1. Try direct connection if accessible
   const targetUrl = `http://${relayNode.ip}:${relayNode.port || 7890}/relay/request-token`;
   try {
+    const ctrl = new AbortController();
+    const tId = setTimeout(() => ctrl.abort(), 1500);
     const relayRes = await fetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ serial, model, modes, device_nonce })
+      body: JSON.stringify({ serial, model, modes, device_nonce }),
+      signal: ctrl.signal
     });
+    clearTimeout(tId);
+    if (relayRes.ok) {
+      const data = await relayRes.json();
+      return res.status(relayRes.status).json(data);
+    }
+  } catch (_) {
+    // Direct connection timed out or rejected (NAT/Firewall)
+  }
 
-    const data = await relayRes.json();
-    res.status(relayRes.status).json(data);
+  // 2. Fallback to reverse task queue
+  try {
+    const result = await dispatchTask('REQUEST_TOKEN', { serial, model, modes, device_nonce });
+    res.json(result);
   } catch (err) {
     res.status(502).json({
       error: 'Failed to contact Relay Agent node',
+      message: err.message
+    });
+  }
+});
+
+// Proxy PPC challenge generation request to active Relay Agent
+app.post(['/api/relay/ppc-challenge', '/relay/ppc-challenge'], async (req, res) => {
+  const { pss_payload } = req.body;
+  const now = Date.now();
+
+  const relayNode = Array.from(nodes.values()).find(
+    (n) => n.is_relay && now - n.lastSeen < 35000
+  );
+
+  if (!relayNode) {
+    return res.status(503).json({
+      error: 'No active Relay Agent online',
+      message: 'Tidak ada instance MRT Relay Agent yang sedang aktif di Central Hub'
+    });
+  }
+
+  // 1. Try direct connection if accessible
+  const targetUrl = `http://${relayNode.ip}:${relayNode.port || 7890}/relay/ppc-challenge`;
+  try {
+    const ctrl = new AbortController();
+    const tId = setTimeout(() => ctrl.abort(), 1500);
+    const relayRes = await fetch(targetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pss_payload }),
+      signal: ctrl.signal
+    });
+    clearTimeout(tId);
+    if (relayRes.ok) {
+      const data = await relayRes.json();
+      return res.status(relayRes.status).json(data);
+    }
+  } catch (_) {
+    // Direct connection timed out or rejected (NAT/Firewall)
+  }
+
+  // 2. Fallback to reverse task queue
+  try {
+    const result = await dispatchTask('PPC_CHALLENGE', { pss_payload });
+    res.json(result);
+  } catch (err) {
+    res.status(502).json({
+      error: 'Failed to contact Relay Agent node for PPC challenge',
       message: err.message
     });
   }

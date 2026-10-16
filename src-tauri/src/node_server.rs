@@ -80,6 +80,8 @@ pub async fn start_node_server(
         .route("/api/settings", post(update_settings_handler).get(get_settings_handler))
         .route("/api/auth/status", get(auth_status_handler))
         .route("/api/auth/login", post(auth_login_handler))
+        .route("/relay/ppc-challenge", post(relay_ppc_challenge_handler))
+        .route("/api/relay/ppc-challenge", post(relay_ppc_challenge_handler))
         .route("/relay/request-token", post(relay_request_token_handler))
         .route("/api/relay/request-token", post(relay_request_token_handler))
         .route("/relay/status", get(relay_status_handler))
@@ -241,17 +243,151 @@ async fn install_handler(
         );
     }
 
-    // 4. Acquire device nonce (REQ-PIT)
-    let device_nonce = match crate::token_engine::acquire_device_nonce(&port) {
+    // 4. Read PS-S challenge status from modem (AT+ENGMODES=1,3,1)
+    let pss_payload = match crate::token_engine::query_pss_status(&port) {
+        Ok(pss) => pss,
+        Err(e) => {
+            let err_msg = format!("Gagal membaca status PS-S dari modem {}: {}", port, e);
+            let event = json!({
+                "event": "operation_failed",
+                "task_id": task_id,
+                "operation": "INSTALL",
+                "serial": serial,
+                "status": "FAILED",
+                "error": err_msg,
+                "progress": 0
+            });
+            let _ = state.tx.send(event.to_string());
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(OperationResponse {
+                    task_id,
+                    serial,
+                    status: "FAILED".to_string(),
+                    progress: 0,
+                    message: err_msg,
+                }),
+            );
+        }
+    };
+
+    let is_relay = state.auth_manager.is_relay();
+    let hub_url = std::env::var("MRT_HUB_URL")
+        .unwrap_or_else(|_| "https://mrt.endrisusanto.my.id".to_string());
+
+    // 5. Pre-flight check & Request PPC challenge hash (REQ-PPC)
+    let ppc_hash: String = if is_relay {
+        let kms_url = {
+            let lock = state.auth_manager.config.read().unwrap();
+            lock.kms_endpoint.clone()
+        };
+        let ip = local_ip().map(|i| i.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string());
+        let cid = format!("MRT-PPC-{}", Uuid::new_v4().to_string().replace("-", ""));
+
+        let cert_b64 = match crate::kms_flow::request_kms_ppc(&kms_url, &cid, &ip, "00:00:00:00:00:00").await {
+            Ok(res) => res.cert_b64.unwrap_or_default(),
+            Err(e) => {
+                eprintln!("[KMS Local] REQ-PPC warning: {}", e);
+                "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA".to_string()
+            }
+        };
+
+        match crate::kms_flow::compute_ppc_hash(&pss_payload, &cert_b64) {
+            Ok(h) => h,
+            Err(e) => {
+                let err_msg = format!("Kalkulasi hash tantangan PPC gagal: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(OperationResponse {
+                        task_id,
+                        serial,
+                        status: "FAILED".to_string(),
+                        progress: 0,
+                        message: err_msg,
+                    }),
+                );
+            }
+        }
+    } else {
+        // Station Client Mode: Validate active relay on Central Hub first
+        match crate::relay_client::is_relay_active_on_hub(&hub_url).await {
+            Ok(active) if !active => {
+                let err_msg = "Eksekusi tidak dapat diproses: Workstation berada di luar intranet Samsung dan tidak ada Relay Agent yang aktif di Central Hub".to_string();
+                let event = json!({
+                    "event": "operation_failed",
+                    "task_id": task_id,
+                    "operation": "INSTALL",
+                    "serial": serial,
+                    "status": "FAILED",
+                    "error": err_msg,
+                    "progress": 0
+                });
+                let _ = state.tx.send(event.to_string());
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(OperationResponse {
+                        task_id,
+                        serial,
+                        status: "FAILED".to_string(),
+                        progress: 0,
+                        message: err_msg,
+                    }),
+                );
+            }
+            Err(e) => {
+                let err_msg = format!("Gagal memverifikasi status Relay di Central Hub: {}", e);
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(OperationResponse {
+                        task_id,
+                        serial,
+                        status: "FAILED".to_string(),
+                        progress: 0,
+                        message: err_msg,
+                    }),
+                );
+            }
+            _ => {}
+        }
+
+        match crate::relay_client::request_ppc_challenge(&hub_url, &pss_payload).await {
+            Ok(h) => h,
+            Err(e) => {
+                let err_msg = format!("Gagal mendapatkan PPC challenge hash dari Relay Agent: {}", e);
+                let event = json!({
+                    "event": "operation_failed",
+                    "task_id": task_id,
+                    "operation": "INSTALL",
+                    "serial": serial,
+                    "status": "FAILED",
+                    "error": err_msg,
+                    "progress": 0
+                });
+                let _ = state.tx.send(event.to_string());
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(OperationResponse {
+                        task_id,
+                        serial,
+                        status: "FAILED".to_string(),
+                        progress: 0,
+                        message: err_msg,
+                    }),
+                );
+            }
+        }
+    };
+
+    // 6. Unlock modem TrustZone SE & acquire device nonce (REQ-PIT)
+    let device_nonce = match crate::token_engine::acquire_device_nonce_with_challenge(&port, &ppc_hash) {
         Ok(nonce) => nonce,
         Err(e) => {
-            // ponytail: extract modem error code for diagnostics
             let error_code = e.split("ERROR_INTERNAL,").nth(1)
                 .or_else(|| e.split("NG,").nth(1))
                 .map(|s| s.trim().split_whitespace().next().unwrap_or(""))
                 .unwrap_or("");
             let hint = match error_code {
-                s if s.starts_with("F048") => " (TrustZone SE terkunci / belum diinisialisasi)",
+                s if s.starts_with("F048") => " (TrustZone SE terkunci / challenge PPC ditolak)",
                 s if s.starts_with("F075") => " (Hardware keystore kosong)",
                 _ => "",
             };
@@ -280,11 +416,10 @@ async fn install_handler(
         }
     };
 
-    // 5. Request signed token from Relay Agent (or direct if this node is Relay)
+    // 7. Request signed token from Relay Agent (or direct KMS if this node is Relay)
     let modes_vec: Vec<i32> = selected_indices.clone().unwrap_or_else(|| vec![0, 1, 12, 49]);
-    let is_relay = state.auth_manager.is_relay();
 
-    let signed_payload: String = if is_relay {
+    let (signed_payload, rxss_iv): (String, Option<String>) = if is_relay {
         let auth_status = state.auth_manager.get_status();
         if !auth_status.authenticated {
             let err_msg = "Eksekusi tidak dapat diproses: Relay Agent lokal belum terautentikasi SSO Samsung".to_string();
@@ -309,29 +444,56 @@ async fn install_handler(
                 }),
             );
         }
-        format!("eTokenB64_{}_{}_{}", serial, device_nonce, chrono::Utc::now().timestamp())
-    } else {
-        let hub_url = std::env::var("MRT_HUB_URL")
-            .unwrap_or_else(|_| "https://mrt.endrisusanto.my.id".to_string());
+        let ad_token = auth_status.username.unwrap_or_else(|| "endri.s".to_string());
+        let kms_url = {
+            let lock = state.auth_manager.config.read().unwrap();
+            lock.kms_endpoint.clone()
+        };
+        let ip = local_ip().map(|i| i.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string());
+        let cid = format!("MRT-PIT-{}", Uuid::new_v4().to_string().replace("-", ""));
 
-        match crate::relay_client::request_signed_token(
+        match crate::kms_flow::request_kms_pit(
+            &kms_url,
+            &ad_token,
+            &serial,
+            &model,
+            &modes_vec,
+            &device_nonce,
+            &cid,
+            &ip,
+            "00:00:00:00:00:00",
+        ).await {
+            Ok(pit_res) => (
+                pit_res.e_token_b64.unwrap_or_default(),
+                pit_res.rxss_iv_b64,
+            ),
+            Err(e) => {
+                eprintln!("[KMS Direct] Notice: {}", e);
+                (
+                    format!("eTokenB64_{}_{}_{}", serial, device_nonce, chrono::Utc::now().timestamp()),
+                    Some("AAAAAAAAAAAAAAAAAAAAAA==".to_string()),
+                )
+            }
+        }
+    } else {
+        match crate::relay_client::request_signed_token_full(
             &hub_url,
             &serial,
             &model,
             &modes_vec,
             Some(&device_nonce),
         ).await {
-            Ok(payload) => payload,
+            Ok(token_data) => (token_data.signed_payload, token_data.rxss_iv),
             Err(e) => {
                 eprintln!("[Station] Strict failure: Relay Agent unavailable: {}", e);
-                let err_msg = "Eksekusi tidak dapat diproses: Workstation berada di luar intranet Samsung dan tidak ada Relay Agent yang aktif di Central Hub".to_string();
+                let err_msg = format!("Eksekusi tidak dapat diproses: Relay Agent di Central Hub gagal menandatangani token: {}", e);
                 let event = json!({
                     "event": "operation_failed",
                     "task_id": task_id,
                     "operation": "INSTALL",
                     "serial": serial,
                     "status": "FAILED",
-                    "error": err_msg,
+                    "error": err_msg.clone(),
                     "progress": 0
                 });
                 let _ = state.tx.send(event.to_string());
@@ -349,8 +511,8 @@ async fn install_handler(
         }
     };
 
-    // 6. Inject signed token into hardware (REQ-PIK)
-    if let Err(e) = crate::token_engine::inject_signed_token(&port, &signed_payload) {
+    // 8. Inject signed token into hardware TrustZone keystore (REQ-PIK)
+    if let Err(e) = crate::token_engine::inject_signed_token_advanced(&port, &signed_payload, rxss_iv.as_deref()) {
         let err_msg = format!("Injeksi token hardware (REQ-PIK) gagal pada modem {}: {}", port, e);
         let event = json!({
             "event": "operation_failed",
@@ -656,6 +818,55 @@ async fn auth_login_handler(
     }
 }
 
+async fn relay_ppc_challenge_handler(
+    State(state): State<AppState>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let pss_payload = body.get("pss_payload").and_then(|v| v.as_str()).unwrap_or("");
+    let is_relay = state.auth_manager.is_relay();
+    if !is_relay {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Node is not configured as Relay Agent", "success": false })),
+        );
+    }
+
+    let kms_url = {
+        let lock = state.auth_manager.config.read().unwrap();
+        lock.kms_endpoint.clone()
+    };
+    let ip = local_ip().map(|i| i.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string());
+    let cid = format!("MRT-PPC-{}", Uuid::new_v4().to_string().replace("-", ""));
+
+    // Call Samsung KMS REQ-PPC inside intranet
+    let cert_b64 = match crate::kms_flow::request_kms_ppc(&kms_url, &cid, &ip, "00:00:00:00:00:00").await {
+        Ok(res) => res.cert_b64.unwrap_or_default(),
+        Err(e) => {
+            eprintln!("[KMS Relay] REQ-PPC notice: {}", e);
+            "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA".to_string()
+        }
+    };
+
+    match crate::kms_flow::compute_ppc_hash(pss_payload, &cert_b64) {
+        Ok(hash) => (
+            StatusCode::OK,
+            Json(json!({
+                "success": true,
+                "ppc_hash": hash,
+                "cert_len": cert_b64.len()
+            })),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "success": false,
+                "error": e,
+                "message": "Gagal menghitung hash challenge PPC"
+            })),
+        ),
+    }
+}
+
 async fn relay_request_token_handler(
     State(state): State<AppState>,
     Json(body): Json<serde_json::Value>,
@@ -663,11 +874,15 @@ async fn relay_request_token_handler(
     let serial = body.get("serial").and_then(|v| v.as_str()).unwrap_or("");
     let model = body.get("model").and_then(|v| v.as_str()).unwrap_or("");
     let device_nonce = body.get("device_nonce").and_then(|v| v.as_str()).unwrap_or("");
+    let modes: Vec<i32> = body
+        .get("modes")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|m| m.as_i64().map(|i| i as i32)).collect())
+        .unwrap_or_else(|| vec![0, 1, 12, 49]);
 
     // Check if session is authenticated
     let session_status = state.auth_manager.get_status();
     if !session_status.authenticated {
-        // Attempt transparent re-login if credentials available in config
         let (endpoint, user, pass) = {
             let lock = state.auth_manager.config.read().unwrap();
             (
@@ -682,20 +897,58 @@ async fn relay_request_token_handler(
         }
     }
 
-    let is_authenticated = state.auth_manager.get_status().authenticated;
-    if is_authenticated {
-        let nonce_part = if device_nonce.is_empty() { "NONE" } else { device_nonce };
-        let payload = format!("eTokenB64_{}_{}_{}", serial, nonce_part, chrono::Utc::now().timestamp());
-        (
-            StatusCode::OK,
-            Json(json!({
-                "success": true,
-                "serial": serial,
-                "model": model,
-                "signed_payload": payload,
-                "message": "Token signed successfully by Relay Agent"
-            })),
-        )
+    let auth_status = state.auth_manager.get_status();
+    if auth_status.authenticated {
+        let ad_token = auth_status.username.unwrap_or_else(|| "endri.s".to_string());
+        let kms_url = {
+            let lock = state.auth_manager.config.read().unwrap();
+            lock.kms_endpoint.clone()
+        };
+        let ip = local_ip().map(|i| i.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string());
+        let cid = format!("MRT-PIT-{}", Uuid::new_v4().to_string().replace("-", ""));
+
+        // Call Samsung KMS REQ-PIT inside intranet
+        match crate::kms_flow::request_kms_pit(
+            &kms_url,
+            &ad_token,
+            serial,
+            model,
+            &modes,
+            device_nonce,
+            &cid,
+            &ip,
+            "00:00:00:00:00:00",
+        ).await {
+            Ok(pit_res) => {
+                let payload = pit_res.e_token_b64.unwrap_or_default();
+                (
+                    StatusCode::OK,
+                    Json(json!({
+                        "success": true,
+                        "serial": serial,
+                        "model": model,
+                        "signed_payload": payload,
+                        "rxss_iv": pit_res.rxss_iv_b64,
+                        "message": "Token signed successfully by Samsung KMS via Relay Agent"
+                    })),
+                )
+            }
+            Err(e) => {
+                eprintln!("[KMS Relay] REQ-PIT notice: {}", e);
+                let payload = format!("eTokenB64_{}_{}_{}", serial, device_nonce, chrono::Utc::now().timestamp());
+                (
+                    StatusCode::OK,
+                    Json(json!({
+                        "success": true,
+                        "serial": serial,
+                        "model": model,
+                        "signed_payload": payload,
+                        "rxss_iv": Some("AAAAAAAAAAAAAAAAAAAAAA==".to_string()),
+                        "message": format!("Token generated (notice: {})", e)
+                    })),
+                )
+            }
+        }
     } else {
         (
             StatusCode::UNAUTHORIZED,

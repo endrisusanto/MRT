@@ -1,6 +1,6 @@
 [package]
 name = "mrt-station"
-version = "2.1.10"
+version = "2.1.11"
 description = "Samsung EM Station Modernized Node Agent"
 authors = ["MRT Team"]
 edition = "2021"
@@ -27,6 +27,8 @@ local-ip-address = "0.6"
 sysinfo = "0.31"
 uuid = { version = "1.10", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10"
+base64 = "0.22"
 
 [profile.release]
 codegen-units = 1

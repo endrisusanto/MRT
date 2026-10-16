@@ -340,24 +340,57 @@ pub fn parse_device_nonce(res: &str) -> Result<String, String> {
     Err(format!("Device did not return a valid nonce payload: {}", res.trim()))
 }
 
-/// Request device nonce from modem via AT+ENGMODES=0,1,
+/// Query PS-S status from modem (AT+ENGMODES=1,3,1)
+pub fn query_pss_status(port_path: &str) -> Result<String, String> {
+    let res = send_at(port_path, "AT+ENGMODES=1,3,1", 1500)
+        .map_err(|e| format!("Gagal membaca status PS-S dari modem: {}", e))?;
+    crate::kms_flow::extract_pss_payload(&res)
+}
+
+/// Request device nonce from modem with PPC challenge hash (AT+ENGMODES=0,1,<hash>)
+pub fn acquire_device_nonce_with_challenge(port_path: &str, ppc_hash: &str) -> Result<String, String> {
+    let cmd = format!("AT+ENGMODES=0,1,{}", ppc_hash.trim());
+    let res = send_at(port_path, &cmd, 3500)
+        .map_err(|e| format!("Gagal mengirim AT+ENGMODES=0,1 challenge: {}", e))?;
+    parse_device_nonce(&res)
+}
+
+/// Request device nonce from modem via AT+ENGMODES=0,1, (legacy fallback)
 pub fn acquire_device_nonce(port_path: &str) -> Result<String, String> {
     let res = send_at(port_path, "AT+ENGMODES=0,1,", 2500)
         .map_err(|e| format!("Failed to request device nonce: {}", e))?;
     parse_device_nonce(&res)
 }
 
-/// Inject signed Knox token payload using Samsung REQ-PIK delimiter format: AT+ENGMODES=0,2,(@#)<payload>(@#)
-pub fn inject_signed_token(port_path: &str, signed_payload: &str) -> Result<String, String> {
-    let clean_payload = signed_payload.trim();
-    let cmd = format!("AT+ENGMODES=0,2,(@#){}(@#)", clean_payload);
-    let res = send_at(port_path, &cmd, 5000)?;
+/// Inject signed Knox token payload using decompiled Janus format or delimiter format
+pub fn inject_signed_token_advanced(
+    port_path: &str,
+    signed_payload: &str,
+    rxss_iv: Option<&str>,
+) -> Result<String, String> {
+    let cmd = if let Some(iv) = rxss_iv {
+        if !iv.is_empty() {
+            crate::kms_flow::construct_injection_command(iv, signed_payload)
+        } else {
+            format!("AT+ENGMODES=0,2,(@#){}(@#)", signed_payload.trim())
+        }
+    } else if signed_payload.starts_with("AT+ENGMODES=0,2,") {
+        signed_payload.trim().to_string()
+    } else {
+        format!("AT+ENGMODES=0,2,(@#){}(@#)", signed_payload.trim())
+    };
 
+    let res = send_at(port_path, &cmd, 5000)?;
     if res.contains("OK") || res.contains("REQ-PIK") || res.contains("Success") {
         Ok("Token successfully injected to hardware".into())
     } else {
         Err(format!("Hardware rejected token: {}", res.trim()))
     }
+}
+
+/// Inject signed Knox token payload using Samsung REQ-PIK delimiter format: AT+ENGMODES=0,2,(@#)<payload>(@#)
+pub fn inject_signed_token(port_path: &str, signed_payload: &str) -> Result<String, String> {
+    inject_signed_token_advanced(port_path, signed_payload, None)
 }
 
 /// Query hardware modem to verify token status directly from TrustZone
