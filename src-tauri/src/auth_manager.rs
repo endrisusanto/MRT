@@ -19,7 +19,7 @@ impl Default for AuthConfig {
         Self {
             station_mode: "station".to_string(),
             relay_url: None,
-            kms_endpoint: "https://kms-intranet.samsung.com/api".to_string(),
+            kms_endpoint: "https://em.sec.samsung.net/anonymous/janusplatform/".to_string(),
             sso_username: String::new(),
             sso_password: String::new(),
             auto_login: true,

@@ -898,7 +898,7 @@
   const DEFAULT_SETTINGS = {
     stationMode: 'station',
     relayUrl: '',
-    kmsEndpoint: 'https://kms-intranet.samsung.com/api',
+    kmsEndpoint: 'https://em.sec.samsung.net/anonymous/janusplatform/',
     ssoUsername: '',
     ssoPassword: '',
     autoLogin: true,
