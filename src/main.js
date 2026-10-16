@@ -250,19 +250,30 @@
   // --- Fetch Data ---
   async function fetchData() {
     try {
-      const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const isLocal = isLocalClient();
 
-      // 1. Fetch devices
+      // 1. Fetch devices: in local desktop app (Tauri/localhost), priority is local node daemon
       let devices = [];
-      try {
-        const res = await fetch('/api/devices');
-        if (res.ok) {
-          devices = await res.json();
-        }
-      } catch (e) {}
+      if (isLocal) {
+        try {
+          const res = await fetch('http://127.0.0.1:7890/devices');
+          if (res.ok) {
+            devices = await res.json();
+          }
+        } catch (e) {}
+      }
 
-      // Fallback to local desktop node only if running locally on localhost
-      if ((!devices || devices.length === 0) && isLocalHost) {
+      if (!devices || devices.length === 0) {
+        try {
+          const res = await fetch('/api/devices');
+          if (res.ok) {
+            devices = await res.json();
+          }
+        } catch (e) {}
+      }
+
+      // Fallback for local client
+      if ((!devices || devices.length === 0) && isLocal) {
         try {
           const res = await fetch('http://localhost:7890/devices');
           if (res.ok) {
@@ -279,9 +290,9 @@
 
       // 2. Fetch node info
       let nodes = [];
-      if (isLocalHost) {
+      if (isLocal) {
         try {
-          const res = await fetch('http://localhost:7890/info');
+          const res = await fetch('http://127.0.0.1:7890/info');
           if (res.ok) {
             const info = await res.json();
             nodes = [info];
@@ -298,6 +309,10 @@
           const res = await fetch('/api/nodes');
           if (res.ok) {
             nodes = await res.json();
+            if (nodes.length > 0 && nodes[0].version) {
+              const vTag = document.getElementById('app-version-tag');
+              if (vTag) vTag.textContent = `v${nodes[0].version}`;
+            }
           }
         } catch (e) {}
       }
