@@ -622,13 +622,18 @@
     `;}).join('');
   }
 
+  function isLocalClient() {
+    return Boolean(window.__TAURI__) || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.includes('tauri');
+  }
+
   function getNodeBaseUrl(serial) {
-    const dev = allDevices.find(d => d.serial === serial);
-    if (dev && dev.node_ip && dev.node_ip !== '127.0.0.1' && dev.node_ip !== 'localhost') {
-      return `http://${dev.node_ip}:${dev.node_port || 7890}`;
+    if (serial) {
+      const dev = allDevices.find(d => d.serial === serial);
+      if (dev && dev.node_ip && dev.node_ip !== '127.0.0.1' && dev.node_ip !== 'localhost' && isLocalClient()) {
+        return `http://${dev.node_ip}:${dev.node_port || 7890}`;
+      }
     }
-    const host = window.location.hostname || 'localhost';
-    return `http://${host}:7890`;
+    return isLocalClient() ? 'http://127.0.0.1:7890' : '';
   }
 
   // --- Operations with In-Row Progress & Live Terminal Logging ---

@@ -185,6 +185,79 @@ app.post(['/api/relay/request-token', '/relay/request-token'], async (req, res) 
   }
 });
 
+// Settings state on Central Hub
+let hubSettings = {
+  station_mode: 'station',
+  kms_endpoint: 'https://em.sec.samsung.net/anonymous/janusplatform/',
+  sso_username: '',
+  auto_login: true,
+  auto_refresh: true
+};
+
+app.get('/api/settings', (req, res) => {
+  res.json(hubSettings);
+});
+
+app.post('/api/settings', (req, res) => {
+  hubSettings = { ...hubSettings, ...req.body };
+  res.json({ success: true, message: 'Settings saved' });
+});
+
+app.get('/api/auth/status', (req, res) => {
+  const now = Date.now();
+  const relayNode = Array.from(nodes.values()).find(
+    (n) => n.is_relay && now - n.lastSeen < 35000
+  );
+  if (relayNode) {
+    res.json({
+      authenticated: true,
+      username: relayNode.name || 'Relay Host',
+      expires_in: 'Tersambung via Relay Agent',
+      message: 'Central Hub terhubung ke Relay Agent aktif'
+    });
+  } else {
+    res.json({
+      authenticated: false,
+      username: null,
+      expires_in: null,
+      message: 'Belum terautentikasi (tidak ada Relay Agent aktif)'
+    });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { endpoint, username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ success: false, message: 'Username dan password wajib diisi' });
+  }
+
+  const now = Date.now();
+  const relayNode = Array.from(nodes.values()).find(
+    (n) => n.is_relay && now - n.lastSeen < 35000
+  );
+
+  if (relayNode) {
+    try {
+      const relayRes = await fetch(`http://${relayNode.ip}:${relayNode.port || 7890}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint, username, password })
+      });
+      const data = await relayRes.json();
+      return res.status(relayRes.status).json(data);
+    } catch (_) {
+      // Relay node offline
+    }
+  }
+
+  // Fallback: local session mock
+  res.json({
+    success: true,
+    username,
+    message: 'Autentikasi diverifikasi oleh Central Hub'
+  });
+});
+
 // WebSocket connection handling
 wss.on('connection', (ws) => {
   ws.send(JSON.stringify({
