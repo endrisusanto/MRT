@@ -160,12 +160,50 @@ pub fn save_token_store(store: &HashMap<String, StoredToken>) {
     }
 }
 
-pub fn register_installed_token(serial: &str, model: &str, expiry_days: i64) -> StoredToken {
+pub fn save_token_to_store(token: &StoredToken) {
+    let mut store = load_token_store();
+    store.insert(token.serial.clone(), token.clone());
+    save_token_store(&store);
+}
+
+pub fn register_installed_token(
+    serial: &str,
+    model: &str,
+    expiry_days: i64,
+    selected_modes: Option<Vec<i32>>,
+) -> StoredToken {
     let mut store = load_token_store();
     let now = Utc::now();
     let issued = now.format("%Y-%m-%d").to_string();
     let expires = (now + chrono::Duration::days(expiry_days)).format("%Y-%m-%d").to_string();
     let token_id = format!("MRT-{}", &Uuid::new_v4().to_string().replace("-", "").to_uppercase()[..16]);
+
+    let modes = match selected_modes {
+        Some(m) if !m.is_empty() => m,
+        _ => vec![MODE_ENG_KERNEL, MODE_INIT_EM, MODE_ACCESS_SOD, MODE_EXTRACT_RAM_DUMP],
+    };
+
+    let mut active_modes = Vec::new();
+    let mut quotas = Vec::new();
+
+    for idx in modes {
+        let name = mode_index_to_name(idx);
+        if name != "MODE_UNKNOWN" {
+            active_modes.push(name.to_string());
+            let tuc = match idx {
+                MODE_ENG_KERNEL => 10,
+                MODE_ACCESS_SOD => 100,
+                MODE_INIT_EM => 1000,
+                MODE_EXTRACT_RAM_DUMP => 1000,
+                _ => 100,
+            };
+            quotas.push(ModeQuota {
+                index: idx,
+                name: name.to_string(),
+                tuc,
+            });
+        }
+    }
 
     let token = StoredToken {
         serial: serial.to_string(),
@@ -175,18 +213,8 @@ pub fn register_installed_token(serial: &str, model: &str, expiry_days: i64) -> 
         issued,
         expires,
         status: "ACTIVE".to_string(),
-        active_modes: vec![
-            "MODE_ENG_KERNEL".to_string(),
-            "MODE_ACCESS_SOD".to_string(),
-            "MODE_INIT_EM".to_string(),
-            "MODE_EXTRACT_RAM_DUMP".to_string(),
-        ],
-        quotas: vec![
-            ModeQuota { index: MODE_ENG_KERNEL, name: "MODE_ENG_KERNEL".to_string(), tuc: 10 },
-            ModeQuota { index: MODE_ACCESS_SOD, name: "MODE_ACCESS_SOD".to_string(), tuc: 100 },
-            ModeQuota { index: MODE_INIT_EM, name: "MODE_INIT_EM".to_string(), tuc: 1000 },
-            ModeQuota { index: MODE_EXTRACT_RAM_DUMP, name: "MODE_EXTRACT_RAM_DUMP".to_string(), tuc: 1000 },
-        ],
+        active_modes,
+        quotas,
     };
 
     store.insert(serial.to_string(), token.clone());
@@ -266,6 +294,17 @@ pub fn parse_engmodes_info(res9: &str, res1: Option<&str>) -> Option<ParsedToken
 
     Some(info)
 }
+
+pub fn inject_signed_token(port_path: &str, signed_payload: &str) -> Result<String, String> {
+    let cmd = format!("AT+ENGMODES=0,0,1,{}", signed_payload);
+    let res = send_at(port_path, &cmd, 3000)?;
+    if res.contains("OK") {
+        Ok("Injected".into())
+    } else {
+        Err(format!("HW rejected: {}", res.trim()))
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

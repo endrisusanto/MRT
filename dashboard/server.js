@@ -115,7 +115,7 @@ app.get('/api/devices', (req, res) => {
 
 // Proxy operation to target node
 app.post('/api/operations', async (req, res) => {
-  const { node_ip, node_port, serial, operation } = req.body;
+  const { node_ip, node_port, serial, operation, modes } = req.body;
 
   if (!node_ip || !serial || !operation) {
     return res.status(400).json({ error: 'node_ip, serial, and operation are required' });
@@ -127,7 +127,8 @@ app.post('/api/operations', async (req, res) => {
   try {
     const response = await fetch(targetUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modes })
     });
 
     const data = await response.json();

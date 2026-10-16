@@ -269,11 +269,38 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
         }
     }
 
-    // 4. Enrich devices with token info
+    // 4. Enrich devices with token info (Hardware modem query takes precedence over offline cache)
     let stored_tokens = token_engine::load_token_store();
 
     for dev in devices.iter_mut() {
-        if let Some(stored) = stored_tokens.get(&dev.serial) {
+        let mut hardware_token = None;
+        if let Some(port) = &dev.port_name {
+            hardware_token = cached_query_device_token(port);
+        }
+
+        if let Some(tok_info) = hardware_token {
+            dev.token_status = Some(tok_info.status.clone());
+            dev.token_owner = tok_info.owner.clone();
+            dev.token_expires = tok_info.expires.clone();
+            dev.active_modes = tok_info.active_modes.clone();
+            dev.mode_quotas = tok_info.quotas.clone();
+            dev.agent_status = "INSTALLED".to_string();
+            if let Some(m) = tok_info.model.clone() {
+                dev.model = m;
+            }
+            // Update stored token cache with hardware truth
+            let _ = token_engine::save_token_to_store(&token_engine::StoredToken {
+                serial: dev.serial.clone(),
+                token_id: tok_info.token_id.unwrap_or_default(),
+                model: dev.model.clone(),
+                owner: dev.token_owner.clone().unwrap_or_default(),
+                issued: tok_info.issued.unwrap_or_default(),
+                expires: dev.token_expires.clone().unwrap_or_default(),
+                status: dev.token_status.clone().unwrap_or_default(),
+                active_modes: dev.active_modes.clone(),
+                quotas: dev.mode_quotas.clone(),
+            });
+        } else if let Some(stored) = stored_tokens.get(&dev.serial) {
             dev.token_status = Some(stored.status.clone());
             dev.token_owner = Some(stored.owner.clone());
             dev.token_expires = Some(stored.expires.clone());
@@ -282,24 +309,6 @@ pub fn scan_devices() -> Vec<DeviceInfo> {
             dev.agent_status = "INSTALLED".to_string();
             if dev.model.is_empty() || dev.model.contains("Android") {
                 dev.model = stored.model.clone();
-            }
-            continue;
-        }
-
-        let mut hardware_token = None;
-        if let Some(port) = &dev.port_name {
-            hardware_token = cached_query_device_token(port);
-        }
-
-        if let Some(tok_info) = hardware_token {
-            dev.token_status = Some(tok_info.status);
-            dev.token_owner = tok_info.owner;
-            dev.token_expires = tok_info.expires;
-            dev.active_modes = tok_info.active_modes;
-            dev.mode_quotas = tok_info.quotas;
-            dev.agent_status = "INSTALLED".to_string();
-            if let Some(m) = tok_info.model {
-                dev.model = m;
             }
         } else {
             dev.token_status = Some("NONE".to_string());

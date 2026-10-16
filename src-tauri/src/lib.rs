@@ -1,7 +1,9 @@
+pub mod auth_manager;
 pub mod device_scanner;
 pub mod hub_client;
 pub mod models;
 pub mod node_server;
+pub mod relay_client;
 pub mod token_engine;
 pub mod tray;
 
@@ -85,7 +87,7 @@ fn execute_operation(
                 .unwrap_or_else(|| "Samsung Mobile Device".to_string())
         };
 
-        let stored = crate::token_engine::register_installed_token(&serial, &model, 90);
+        let stored = crate::token_engine::register_installed_token(&serial, &model, 90, None);
 
         {
             let mut lock = state.cached_devices.lock().unwrap();

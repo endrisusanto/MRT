@@ -26,6 +26,7 @@ pub struct AppState {
     pub start_time: Instant,
     pub tx: broadcast::Sender<String>,
     pub cached_devices: Arc<Mutex<Vec<DeviceInfo>>>,
+    pub auth_manager: crate::auth_manager::AuthManager,
 }
 
 pub async fn start_node_server(
@@ -53,12 +54,15 @@ pub async fn start_node_server(
         }
     });
 
+    let auth_manager = crate::auth_manager::AuthManager::new();
+
     let state = AppState {
         node_id,
         node_name,
         start_time,
         tx,
         cached_devices,
+        auth_manager,
     };
 
     let cors = CorsLayer::new()
@@ -74,6 +78,11 @@ pub async fn start_node_server(
         .route("/devices/:serial/uninstall", post(uninstall_handler))
         .route("/devices/:serial/remove-token", post(remove_token_handler))
         .route("/devices/:serial/recover", post(recover_handler))
+        .route("/api/settings", post(update_settings_handler).get(get_settings_handler))
+        .route("/api/auth/status", get(auth_status_handler))
+        .route("/api/auth/login", post(auth_login_handler))
+        .route("/relay/request-token", post(relay_request_token_handler))
+        .route("/relay/status", get(relay_status_handler))
         .route("/ws", get(ws_handler))
         .layer(cors)
         .with_state(state);
@@ -133,8 +142,31 @@ async fn devices_handler(State(state): State<AppState>) -> impl IntoResponse {
 async fn install_handler(
     Path(serial): Path<String>,
     State(state): State<AppState>,
+    body_bytes: axum::body::Bytes,
 ) -> impl IntoResponse {
     let task_id = Uuid::new_v4().to_string();
+
+    let selected_indices: Option<Vec<i32>> = if !body_bytes.is_empty() {
+        if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+            val.get("modes").and_then(|m| m.as_array()).map(|arr| {
+                arr.iter()
+                    .filter_map(|item| {
+                        if let Some(num) = item.as_i64() {
+                            Some(num as i32)
+                        } else if let Some(s) = item.as_str() {
+                            s.parse::<i32>().ok().or_else(|| crate::token_engine::mode_name_to_index(s))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     // 1. Locate modem port if available
     let port_opt = {
@@ -142,12 +174,7 @@ async fn install_handler(
         lock.iter().find(|d| d.serial == serial).and_then(|d| d.port_name.clone())
     }.or_else(|| crate::device_scanner::find_port_for_serial(&serial));
 
-    // 2. If modem port is present, send AT+ENGMODES=1,1,0 to query/activate port
-    if let Some(ref port) = port_opt {
-        let _ = crate::token_engine::send_at(port, "AT+ENGMODES=1,1,0", 800);
-    }
-
-    // 3. Register standalone token with 90 days validity
+    // 2. Query device model
     let model = {
         let lock = state.cached_devices.lock().unwrap();
         lock.iter()
@@ -156,9 +183,34 @@ async fn install_handler(
             .unwrap_or_else(|| "Samsung Mobile Device".to_string())
     };
 
-    let stored = crate::token_engine::register_installed_token(&serial, &model, 90);
+    // 3. Request signed token from relay if configured and inject into hardware
+    let mut hw_injected = false;
+    let relay_url_opt = state.auth_manager.get_relay_url();
+    if let (Some(ref relay_url), Some(ref port)) = (&relay_url_opt, &port_opt) {
+        let modes_vec: Vec<i32> = selected_indices.clone().unwrap_or_else(|| vec![0, 1, 12, 49]);
+        match crate::relay_client::request_signed_token(relay_url, &serial, &model, &modes_vec).await {
+            Ok(payload) => {
+                match crate::token_engine::inject_signed_token(port, &payload) {
+                    Ok(_) => {
+                        hw_injected = true;
+                    }
+                    Err(e) => {
+                        eprintln!("[Relay] Hardware injection failed: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("[Relay] Token request failed: {}", e);
+            }
+        }
+    } else if let Some(ref port) = port_opt {
+        let _ = crate::token_engine::send_at(port, "AT+ENGMODES=1,1,0", 800);
+    }
 
-    // 4. Update in-memory cached devices so next read immediately shows ACTIVE
+    // 4. Register standalone token with 90 days validity
+    let stored = crate::token_engine::register_installed_token(&serial, &model, 90, selected_indices);
+
+    // 5. Update in-memory cached devices so next read immediately shows ACTIVE
     {
         let mut lock = state.cached_devices.lock().unwrap();
         if let Some(dev) = lock.iter_mut().find(|d| d.serial == serial) {
@@ -174,7 +226,7 @@ async fn install_handler(
         }
     }
 
-    // 5. Broadcast completion event via websocket
+    // 6. Broadcast completion event via websocket
     let event = json!({
         "event": "operation_completed",
         "task_id": task_id,
@@ -182,16 +234,23 @@ async fn install_handler(
         "serial": serial,
         "status": "COMPLETED",
         "token_expires": stored.expires,
+        "hw_injected": hw_injected,
         "progress": 100
     });
     let _ = state.tx.send(event.to_string());
+
+    let message = if hw_injected {
+        format!("Token disuntikkan ke hardware via relay. Expired: {}", stored.expires)
+    } else {
+        format!("Token mode berhasil dipasang. Expired: {} (90 hari)", stored.expires)
+    };
 
     let res = OperationResponse {
         task_id,
         serial,
         status: "COMPLETED".to_string(),
         progress: 100,
-        message: format!("Token mode berhasil dipasang. Expired: {} (90 hari)", stored.expires),
+        message,
     };
 
     (StatusCode::OK, Json(res))
@@ -349,3 +408,112 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
         }
     }
 }
+
+async fn get_settings_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let cfg = {
+        let lock = state.auth_manager.config.read().unwrap();
+        lock.clone()
+    };
+    Json(cfg)
+}
+
+async fn update_settings_handler(
+    State(state): State<AppState>,
+    Json(cfg): Json<crate::auth_manager::AuthConfig>,
+) -> impl IntoResponse {
+    state.auth_manager.update_config(cfg);
+    Json(json!({ "success": true, "message": "Settings updated" }))
+}
+
+async fn auth_status_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let status = state.auth_manager.get_status();
+    Json(status)
+}
+
+#[derive(serde::Deserialize)]
+struct LoginRequest {
+    endpoint: String,
+    username: String,
+    password: String,
+}
+
+async fn auth_login_handler(
+    State(state): State<AppState>,
+    Json(req): Json<LoginRequest>,
+) -> impl IntoResponse {
+    match state
+        .auth_manager
+        .authenticate(&req.endpoint, &req.username, &req.password)
+        .await
+    {
+        Ok(session) => (
+            StatusCode::OK,
+            Json(json!({
+                "success": true,
+                "username": session.username,
+                "message": "Autentikasi SSO berhasil"
+            })),
+        ),
+        Err(err) => (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "success": false,
+                "message": err
+            })),
+        ),
+    }
+}
+
+async fn relay_request_token_handler(
+    State(state): State<AppState>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let serial = body.get("serial").and_then(|v| v.as_str()).unwrap_or("");
+    let model = body.get("model").and_then(|v| v.as_str()).unwrap_or("");
+
+    // Check if session is authenticated
+    let session_status = state.auth_manager.get_status();
+    if !session_status.authenticated {
+        // Attempt transparent re-login if credentials available in config
+        let (endpoint, user, pass) = {
+            let lock = state.auth_manager.config.read().unwrap();
+            (
+                lock.kms_endpoint.clone(),
+                lock.sso_username.clone(),
+                lock.sso_password.clone(),
+            )
+        };
+
+        if !user.is_empty() && !pass.is_empty() {
+            let _ = state.auth_manager.authenticate(&endpoint, &user, &pass).await;
+        }
+    }
+
+    // Samsung KMS SDK binding stub
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(json!({
+            "error": "KMS integration not configured on relay host",
+            "serial": serial,
+            "model": model,
+            "hint": "Set up Samsung KMS SDK binding on this Windows relay instance"
+        })),
+    )
+}
+
+async fn relay_status_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let auth = state.auth_manager.get_status();
+    let is_relay = {
+        let lock = state.auth_manager.config.read().unwrap();
+        lock.station_mode == "relay"
+    };
+
+    Json(json!({
+        "is_relay_host": is_relay,
+        "relay_available": is_relay,
+        "authenticated": auth.authenticated,
+        "user": auth.username,
+        "message": if is_relay { "Relay Agent Host active" } else { "Station Client Mode" }
+    }))
+}
+

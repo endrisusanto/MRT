@@ -41,6 +41,25 @@
   const terminalBox = document.getElementById('terminal-box');
   const terminalTarget = document.getElementById('drawer-subtitle') || document.getElementById('terminal-active-target');
 
+  // Settings Drawer
+  const btnSettings = document.getElementById('btn-settings');
+  const settingsBackdrop = document.getElementById('settings-backdrop');
+  const btnCloseSettings = document.getElementById('btn-close-settings');
+  const selectStationMode = document.getElementById('setting-station-mode');
+  const fieldRelayUrl = document.getElementById('field-relay-url');
+  const inputRelayUrl = document.getElementById('setting-relay-url');
+  const inputKmsEndpoint = document.getElementById('setting-kms-endpoint');
+  const inputSsoUsername = document.getElementById('setting-sso-username');
+  const inputSsoPassword = document.getElementById('setting-sso-password');
+  const btnTogglePassword = document.getElementById('btn-toggle-password');
+  const cbAutoLogin = document.getElementById('setting-auto-login');
+  const cbAutoRefresh = document.getElementById('setting-auto-refresh');
+  const sessionDot = document.getElementById('session-dot');
+  const sessionStatusText = document.getElementById('session-status-text');
+  const sessionStatusDetail = document.getElementById('session-status-detail');
+  const btnTestLogin = document.getElementById('btn-test-login');
+  const btnSaveSettings = document.getElementById('btn-save-settings');
+
   // Tabs & Views
   const tabDevices = document.getElementById('tab-devices');
   const tabNodes = document.getElementById('tab-nodes');
@@ -233,6 +252,8 @@
   // --- Fetch Data ---
   async function fetchData() {
     try {
+      const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
       // 1. Fetch devices
       let devices = [];
       try {
@@ -242,7 +263,8 @@
         }
       } catch (e) {}
 
-      if (!devices || devices.length === 0) {
+      // Fallback to local desktop node only if running locally on localhost
+      if ((!devices || devices.length === 0) && isLocalHost) {
         try {
           const res = await fetch('http://localhost:7890/devices');
           if (res.ok) {
@@ -259,21 +281,27 @@
 
       // 2. Fetch node info
       let nodes = [];
-      try {
-        const res = await fetch('http://localhost:7890/info');
-        if (res.ok) {
-          const info = await res.json();
-          nodes = [info];
-          if (info.version) {
-            const vTag = document.getElementById('app-version-tag');
-            if (vTag) vTag.textContent = `v${info.version}`;
+      if (isLocalHost) {
+        try {
+          const res = await fetch('http://localhost:7890/info');
+          if (res.ok) {
+            const info = await res.json();
+            nodes = [info];
+            if (info.version) {
+              const vTag = document.getElementById('app-version-tag');
+              if (vTag) vTag.textContent = `v${info.version}`;
+            }
           }
-        }
-      } catch (e) {
-        const res = await fetch('/api/nodes');
-        if (res.ok) {
-          nodes = await res.json();
-        }
+        } catch (e) {}
+      }
+
+      if (nodes.length === 0) {
+        try {
+          const res = await fetch('/api/nodes');
+          if (res.ok) {
+            nodes = await res.json();
+          }
+        } catch (e) {}
       }
       allNodes = nodes || [];
 
@@ -420,13 +448,20 @@
   function renderFleetTable() {
     if (!fleetTableBody) return;
     const filtered = getFilteredDevices();
+    const fleetTableContainer = document.getElementById('fleet-table-container');
+
     if (filtered.length === 0) {
       fleetTableBody.innerHTML = '';
       if (fleetTableEmpty) fleetTableEmpty.style.display = 'flex';
+      if (fleetTableContainer) {
+        fleetTableContainer.style.display = 'none';
+        fleetTableContainer.scrollLeft = 0;
+      }
       return;
     }
 
     if (fleetTableEmpty) fleetTableEmpty.style.display = 'none';
+    if (fleetTableContainer) fleetTableContainer.style.display = 'block';
     fleetTableBody.innerHTML = filtered.map(d => {
       const isSelected = selectedSerials.has(d.serial);
       const isTokenActive = d.token_status === 'ACTIVE';
@@ -448,7 +483,7 @@
           No Token
         </span>
       `;
-      let expireHtml = '<span class="device-expire-muted">—</span>';
+      let expireHtml = '<span class="device-expire-muted">-</span>';
 
       if (isTokenActive) {
         statusHtml = `
@@ -807,6 +842,215 @@
         fetchData();
       });
     }
+
+    // Settings drawer interactions
+    if (btnSettings) {
+      btnSettings.addEventListener('click', openSettingsDrawer);
+    }
+
+    if (btnCloseSettings) {
+      btnCloseSettings.addEventListener('click', closeSettingsDrawer);
+    }
+
+    if (settingsBackdrop) {
+      settingsBackdrop.addEventListener('click', (e) => {
+        if (e.target === settingsBackdrop) closeSettingsDrawer();
+      });
+    }
+
+    if (btnTogglePassword && inputSsoPassword) {
+      btnTogglePassword.addEventListener('click', () => {
+        const isPassword = inputSsoPassword.type === 'password';
+        inputSsoPassword.type = isPassword ? 'text' : 'password';
+        const eyeIcon = btnTogglePassword.querySelector('.icon-eye');
+        const eyeOffIcon = btnTogglePassword.querySelector('.icon-eye-off');
+        if (eyeIcon && eyeOffIcon) {
+          eyeIcon.style.display = isPassword ? 'none' : 'inline-block';
+          eyeOffIcon.style.display = isPassword ? 'inline-block' : 'none';
+        }
+      });
+    }
+
+    if (selectStationMode && fieldRelayUrl) {
+      selectStationMode.addEventListener('change', () => {
+        fieldRelayUrl.style.display = selectStationMode.value === 'relay' ? 'none' : 'flex';
+      });
+    }
+
+    if (btnSaveSettings) {
+      btnSaveSettings.addEventListener('click', () => saveSettings(true));
+    }
+
+    if (btnTestLogin) {
+      btnTestLogin.addEventListener('click', testLogin);
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeTerminalDrawer();
+        closeSettingsDrawer();
+      }
+    });
+  }
+
+  // Settings and auto-login state
+  const DEFAULT_SETTINGS = {
+    stationMode: 'station',
+    relayUrl: '',
+    kmsEndpoint: 'https://kms-intranet.samsung.com/api',
+    ssoUsername: '',
+    ssoPassword: '',
+    autoLogin: true,
+    autoRefresh: true
+  };
+
+  let currentSettings = { ...DEFAULT_SETTINGS };
+
+  function openSettingsDrawer() {
+    if (settingsBackdrop) {
+      settingsBackdrop.classList.add('open');
+      settingsBackdrop.classList.add('active');
+    }
+  }
+
+  function closeSettingsDrawer() {
+    if (settingsBackdrop) {
+      settingsBackdrop.classList.remove('open');
+      settingsBackdrop.classList.remove('active');
+    }
+  }
+
+  function loadSettings() {
+    try {
+      const stored = localStorage.getItem('mrt_station_settings');
+      if (stored) {
+        currentSettings = { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+      }
+    } catch (_) {
+      currentSettings = { ...DEFAULT_SETTINGS };
+    }
+
+    if (selectStationMode) selectStationMode.value = currentSettings.stationMode || 'station';
+    if (inputRelayUrl) inputRelayUrl.value = currentSettings.relayUrl || '';
+    if (inputKmsEndpoint) inputKmsEndpoint.value = currentSettings.kmsEndpoint || DEFAULT_SETTINGS.kmsEndpoint;
+    if (inputSsoUsername) inputSsoUsername.value = currentSettings.ssoUsername || '';
+    if (inputSsoPassword) inputSsoPassword.value = currentSettings.ssoPassword || '';
+    if (cbAutoLogin) cbAutoLogin.checked = currentSettings.autoLogin !== false;
+    if (cbAutoRefresh) cbAutoRefresh.checked = currentSettings.autoRefresh !== false;
+
+    if (fieldRelayUrl) {
+      fieldRelayUrl.style.display = currentSettings.stationMode === 'relay' ? 'none' : 'flex';
+    }
+
+    syncSettingsWithBackend();
+  }
+
+  async function syncSettingsWithBackend() {
+    try {
+      const baseUrl = getNodeBaseUrl();
+      await fetch(`${baseUrl}/api/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          station_mode: currentSettings.stationMode,
+          relay_url: currentSettings.stationMode === 'relay' ? '' : currentSettings.relayUrl,
+          kms_endpoint: currentSettings.kmsEndpoint,
+          sso_username: currentSettings.ssoUsername,
+          sso_password: currentSettings.ssoPassword,
+          auto_login: currentSettings.autoLogin,
+          auto_refresh: currentSettings.autoRefresh
+        })
+      });
+    } catch (_) {
+      // Backend daemon may still be initializing
+    }
+  }
+
+  function saveSettings(notify = true) {
+    currentSettings.stationMode = selectStationMode ? selectStationMode.value : 'station';
+    currentSettings.relayUrl = inputRelayUrl ? inputRelayUrl.value.trim() : '';
+    currentSettings.kmsEndpoint = inputKmsEndpoint ? inputKmsEndpoint.value.trim() : '';
+    currentSettings.ssoUsername = inputSsoUsername ? inputSsoUsername.value.trim() : '';
+    currentSettings.ssoPassword = inputSsoPassword ? inputSsoPassword.value : '';
+    currentSettings.autoLogin = cbAutoLogin ? cbAutoLogin.checked : true;
+    currentSettings.autoRefresh = cbAutoRefresh ? cbAutoRefresh.checked : true;
+
+    localStorage.setItem('mrt_station_settings', JSON.stringify(currentSettings));
+    syncSettingsWithBackend();
+
+    if (notify) {
+      showToast('Pengaturan station dan kredensial SSO berhasil disimpan', 'info');
+      addLog('HUB', 'INFO', `Pengaturan disimpan. Mode: ${currentSettings.stationMode}`);
+    }
+  }
+
+  function updateSessionStatusUI(state, title, detail) {
+    if (!sessionDot || !sessionStatusText || !sessionStatusDetail) return;
+    sessionDot.className = 'status-dot-pulse ' + state;
+    sessionStatusText.textContent = title;
+    sessionStatusDetail.textContent = detail;
+  }
+
+  async function checkSessionStatus() {
+    try {
+      const baseUrl = getNodeBaseUrl();
+      const res = await fetch(`${baseUrl}/api/auth/status`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.authenticated) {
+          updateSessionStatusUI('active', `Sesi Aktif: ${data.username || 'SSO User'}`, `Kedaluwarsa: ${data.expires_in || 'Aktif'}`);
+        } else {
+          updateSessionStatusUI('error', 'Belum Terautentikasi', data.message || 'Silakan lakukan test login');
+        }
+      } else {
+        updateSessionStatusUI('error', 'Daemon Offline', 'Tidak dapat menghubungi node server');
+      }
+    } catch (_) {
+      updateSessionStatusUI('error', 'Belum Terhubung', 'Node server belum siap');
+    }
+  }
+
+  async function testLogin() {
+    const username = inputSsoUsername ? inputSsoUsername.value.trim() : '';
+    const password = inputSsoPassword ? inputSsoPassword.value : '';
+    const endpoint = inputKmsEndpoint ? inputKmsEndpoint.value.trim() : '';
+
+    if (!username || !password) {
+      showToast('Harap isi username dan password SSO terlebih dahulu', 'error');
+      return;
+    }
+
+    updateSessionStatusUI('connecting', 'Mencoba Login...', 'Menghubungkan ke gateway KMS');
+    addLog('HUB', 'CMD', `Melakukan autentikasi SSO untuk ${username}`);
+
+    try {
+      const baseUrl = getNodeBaseUrl();
+      const res = await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint,
+          username,
+          password
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        updateSessionStatusUI('active', `Sesi Aktif: ${username}`, 'Autentikasi KMS berhasil');
+        showToast('Login Samsung SSO berhasil terverifikasi', 'info');
+        addLog('HUB', 'INFO', `Autentikasi SSO sukses untuk ${username}`);
+      } else {
+        updateSessionStatusUI('error', 'Login Gagal', data.message || 'Kredensial atau server tidak valid');
+        showToast(`Login gagal: ${data.message || 'Periksa kredensial'}`, 'error');
+        addLog('HUB', 'ERROR', `Autentikasi SSO gagal: ${data.message || 'Ditolak'}`);
+      }
+    } catch (e) {
+      updateSessionStatusUI('error', 'Koneksi Error', e.message);
+      showToast(`Koneksi error: ${e.message}`, 'error');
+      addLog('HUB', 'ERROR', `Gagal koneksi ke endpoint auth: ${e.message}`);
+    }
   }
 
   // Initial Seed Logs
@@ -816,6 +1060,8 @@
   // Init
   initTheme();
   initEvents();
+  loadSettings();
+  checkSessionStatus();
   fetchData();
 
   // Polling every 5 seconds
