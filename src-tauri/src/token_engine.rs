@@ -66,7 +66,7 @@ pub fn send_at(port_path: &str, cmd: &str, timeout_ms: u64) -> Result<String, St
     std::thread::sleep(Duration::from_millis(150));
 
     let mut response = Vec::new();
-    let mut read_buf = [0u8; 2048];
+    let mut read_buf = [0u8; 8192];
     let start_time = std::time::Instant::now();
 
     while start_time.elapsed() < Duration::from_millis(timeout_ms) {
@@ -74,7 +74,18 @@ pub fn send_at(port_path: &str, cmd: &str, timeout_ms: u64) -> Result<String, St
             Ok(n) if n > 0 => {
                 response.extend_from_slice(&read_buf[..n]);
                 let s = String::from_utf8_lossy(&response);
-                if s.contains("OK\r") || s.contains("OK\n") || s.contains("NG") || s.contains("ERROR") {
+
+                // For AT+ENGMODES commands, wait for the actual modem response line (+ENGMODES: or ERROR)
+                if cmd.starts_with("AT+ENGMODES") {
+                    if let Some(pos) = s.rfind("+ENGMODES:") {
+                        let after_prefix = &s[pos..];
+                        if after_prefix.contains('\n') && (after_prefix.contains("OK") || after_prefix.contains("NG") || after_prefix.contains("TOK")) {
+                            break;
+                        }
+                    } else if s.contains("ERROR\r") || s.contains("ERROR\n") {
+                        break;
+                    }
+                } else if s.contains("OK\r") || s.contains("OK\n") || s.contains("NG") || s.contains("ERROR") {
                     break;
                 }
             }
@@ -354,7 +365,7 @@ pub fn acquire_device_nonce_with_challenge(port_path: &str, challenge_cmd_or_has
     } else {
         format!("AT+ENGMODES=0,1,{}", challenge_cmd_or_hash.trim())
     };
-    let res = send_at(port_path, &cmd, 5000)
+    let res = send_at(port_path, &cmd, 30000)
         .map_err(|e| format!("Gagal mengirim AT+ENGMODES=0,1 challenge: {}", e))?;
 
     if res.contains("ERROR_INTERNAL") || res.contains("NG") {
@@ -370,7 +381,7 @@ pub fn acquire_device_nonce_with_challenge(port_path: &str, challenge_cmd_or_has
 
 /// Request device nonce from modem via AT+ENGMODES=0,1, (legacy fallback)
 pub fn acquire_device_nonce(port_path: &str) -> Result<String, String> {
-    let res = send_at(port_path, "AT+ENGMODES=0,1,", 2500)
+    let res = send_at(port_path, "AT+ENGMODES=0,1,", 5000)
         .map_err(|e| format!("Failed to request device nonce: {}", e))?;
     parse_device_nonce(&res)
 }
@@ -393,7 +404,7 @@ pub fn inject_signed_token_advanced(
         format!("AT+ENGMODES=0,2,(@#){}(@#)", signed_payload.trim())
     };
 
-    let res = send_at(port_path, &cmd, 5000)?;
+    let res = send_at(port_path, &cmd, 20000)?;
     if res.contains("OK") || res.contains("REQ-PIK") || res.contains("Success") {
         Ok("Token successfully injected to hardware".into())
     } else {

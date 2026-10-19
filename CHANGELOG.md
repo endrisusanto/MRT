@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.1.16] - 2026-10-19
+
+Increase AT+ENGMODES challenge timeout to 30s to allow TrustZone signature verification
+
+
 ## [v2.1.15] - 2026-10-19
 
 chore(release): bump version and publish artifacts
