@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.1.18] - 2026-10-19
+
+fix(kms): set userType to empty string in REQ-PIT and pass genuine device CID across relay flow
+
+
 ## [v2.1.17] - 2026-10-19
 
 fix(kms): resolve REQ-PIT parsing for Protocol 04 and remove NG false-positive in ENGMODES

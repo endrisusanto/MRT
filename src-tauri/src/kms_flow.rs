@@ -412,7 +412,7 @@ pub async fn request_kms_pit(
     let req = PitRequest {
         msg_type: "REQ-PIT".to_string(),
         prot_ver: "04".to_string(),
-        user_type: "SEC".to_string(),
+        user_type: "".to_string(),
         auth: ad_token.to_string(),
         auth_len: ad_token.len(),
         ess_id: "".to_string(),
@@ -438,6 +438,9 @@ pub async fn request_kms_pit(
         format!("{}/REQ-PIT", base)
     };
 
+    let json_payload = serde_json::to_string(&req).unwrap_or_default();
+    eprintln!("[KMS Direct] REQ-PIT url={} payload={}", url, json_payload);
+
     let res = client
         .post(&url)
         .header("Accept", "application/json")
@@ -451,12 +454,16 @@ pub async fn request_kms_pit(
         return Err(format!("KMS REQ-PIT returned HTTP {}", res.status()));
     }
 
-    let pit_res: PitResponse = res.json().await
-        .map_err(|e| format!("Failed to parse KMS PIT response: {}", e))?;
+    let res_text = res.text().await
+        .map_err(|e| format!("Failed to read KMS PIT response text: {}", e))?;
+    eprintln!("[KMS Direct] REQ-PIT response: {}", res_text);
+
+    let pit_res: PitResponse = serde_json::from_str(&res_text)
+        .map_err(|e| format!("Failed to parse KMS PIT response ({}): {}", e, res_text))?;
 
     if pit_res.ret_code != "S" && pit_res.e_token_b64.is_none() {
-        let err_msg = pit_res.ret_msg.unwrap_or_else(|| pit_res.ret_code);
-        return Err(format!("KMS REQ-PIT rejected: {}", err_msg));
+        let err_msg = pit_res.ret_msg.as_deref().unwrap_or(pit_res.ret_code.as_str());
+        return Err(format!("KMS REQ-PIT rejected (code {}): {}", pit_res.ret_code, err_msg));
     }
 
     Ok(pit_res)

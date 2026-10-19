@@ -547,6 +547,7 @@ async fn install_handler(
             &model,
             &modes_vec,
             Some(&device_nonce),
+            Some(&device_cid),
         ).await {
             Ok(token_data) => (token_data.signed_payload, token_data.rxss_iv),
             Err(e) => {
@@ -1005,7 +1006,10 @@ async fn relay_request_token_handler(
             lock.kms_endpoint.clone()
         };
         let ip = local_ip().map(|i| i.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string());
-        let cid = format!("MRT-PIT-{}", Uuid::new_v4().to_string().replace("-", ""));
+        let cid = body.get("cid")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "25112200".to_string());
 
         let nonce_obj = match crate::kms_flow::parse_modem_pit_response(device_nonce) {
             Ok(n) => n,
@@ -1029,7 +1033,7 @@ async fn relay_request_token_handler(
             &nonce_obj,
             &cid,
             &ip,
-            "000000000000",
+            "00:00:00:00:00:00",
         ).await {
             Ok(pit_res) => {
                 let payload = pit_res.e_token_b64.unwrap_or_default();

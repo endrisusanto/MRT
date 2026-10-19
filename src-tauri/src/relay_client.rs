@@ -7,6 +7,8 @@ pub struct RelayRequest {
     pub modes: Vec<i32>,
     #[serde(default)]
     pub device_nonce: Option<String>,
+    #[serde(default)]
+    pub cid: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -111,6 +113,7 @@ pub async fn request_signed_token_full(
     model: &str,
     modes: &[i32],
     device_nonce: Option<&str>,
+    cid: Option<&str>,
 ) -> Result<SignedTokenData, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(12))
@@ -127,6 +130,7 @@ pub async fn request_signed_token_full(
         model: model.to_string(),
         modes: modes.to_vec(),
         device_nonce: device_nonce.map(|s| s.to_string()),
+        cid: cid.map(|s| s.to_string()),
     };
 
     let res = client
@@ -180,7 +184,7 @@ pub async fn request_signed_token(
     modes: &[i32],
     device_nonce: Option<&str>,
 ) -> Result<String, String> {
-    request_signed_token_full(relay_url, serial, model, modes, device_nonce)
+    request_signed_token_full(relay_url, serial, model, modes, device_nonce, None)
         .await
         .map(|d| d.signed_payload)
 }
