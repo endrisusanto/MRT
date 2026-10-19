@@ -71,13 +71,18 @@ async fn execute_relay_task(
     match task_type {
         "PPC_CHALLENGE" => {
             let pss_payload = payload.get("pss_payload").and_then(|v| v.as_str()).unwrap_or("");
-            let cid = if !pss_payload.is_empty() {
-                crate::kms_flow::extract_pss_cid(pss_payload)
-            } else {
-                format!("MRT-PPC-{}", uuid::Uuid::new_v4().to_string().replace("-", ""))
+            let cid = match crate::kms_flow::extract_pss_cid(pss_payload) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("[Relay Worker] Extract CID failed: {}", e);
+                    return serde_json::json!({
+                        "success": false,
+                        "error": format!("Ekstraksi CID gagal: {}", e)
+                    });
+                }
             };
 
-            let ppc_res = match crate::kms_flow::request_kms_ppc(&kms_url, &cid, &ip, "000000000000").await {
+            let ppc_res = match crate::kms_flow::request_kms_ppc(&kms_url, &cid, &ip, "00:00:00:00:00:00").await {
                 Ok(res) => res,
                 Err(e) => {
                     eprintln!("[Relay Worker] REQ-PPC failed: {}", e);

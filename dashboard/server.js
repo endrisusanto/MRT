@@ -273,7 +273,7 @@ app.post(['/api/relay/request-token', '/relay/request-token'], async (req, res) 
 
 // Proxy PPC challenge generation request to active Relay Agent
 app.post(['/api/relay/ppc-challenge', '/relay/ppc-challenge'], async (req, res) => {
-  const { pss_payload } = req.body;
+  const { pss_payload, modes, user_id } = req.body;
   const now = Date.now();
 
   const relayNode = Array.from(nodes.values()).find(
@@ -295,7 +295,7 @@ app.post(['/api/relay/ppc-challenge', '/relay/ppc-challenge'], async (req, res) 
     const relayRes = await fetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pss_payload }),
+      body: JSON.stringify({ pss_payload, modes, user_id }),
       signal: ctrl.signal
     });
     clearTimeout(tId);
@@ -309,7 +309,7 @@ app.post(['/api/relay/ppc-challenge', '/relay/ppc-challenge'], async (req, res) 
 
   // 2. Fallback to reverse task queue
   try {
-    const result = await dispatchTask('PPC_CHALLENGE', { pss_payload });
+    const result = await dispatchTask('PPC_CHALLENGE', { pss_payload, modes, user_id });
     res.json(result);
   } catch (err) {
     res.status(502).json({

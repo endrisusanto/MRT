@@ -286,9 +286,24 @@ async fn install_handler(
             lock.kms_endpoint.clone()
         };
         let ip = local_ip().map(|i| i.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string());
-        let cid = crate::kms_flow::extract_pss_cid(&pss_payload);
+        let cid = match crate::kms_flow::extract_pss_cid(&pss_payload) {
+            Ok(c) => c,
+            Err(e) => {
+                let err_msg = format!("Ekstraksi CID gagal: {}", e);
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(OperationResponse {
+                        task_id,
+                        serial,
+                        status: "FAILED".to_string(),
+                        progress: 0,
+                        message: err_msg,
+                    }),
+                );
+            }
+        };
 
-        let cert_b64 = match crate::kms_flow::request_kms_ppc(&kms_url, &cid, &ip, "000000000000").await {
+        let cert_b64 = match crate::kms_flow::request_kms_ppc(&kms_url, &cid, &ip, "00:00:00:00:00:00").await {
             Ok(res) if res.cert_b64.is_some() => res.cert_b64.unwrap(),
             Ok(res) => {
                 let err_msg = format!("KMS REQ-PPC ditolak server dengan retCode: {}", res.ret_code);
@@ -887,14 +902,22 @@ async fn relay_ppc_challenge_handler(
         lock.kms_endpoint.clone()
     };
     let ip = local_ip().map(|i| i.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string());
-    let cid = if !pss_payload.is_empty() {
-        crate::kms_flow::extract_pss_cid(pss_payload)
-    } else {
-        format!("MRT-PPC-{}", Uuid::new_v4().to_string().replace("-", ""))
+    let cid = match crate::kms_flow::extract_pss_cid(pss_payload) {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "success": false,
+                    "error": format!("Ekstraksi CID gagal: {}", e),
+                    "message": "Output PS-S tidak mengandung CID perangkat valid"
+                })),
+            );
+        }
     };
 
     // Call Samsung KMS REQ-PPC inside intranet
-    let ppc_res = match crate::kms_flow::request_kms_ppc(&kms_url, &cid, &ip, "000000000000").await {
+    let ppc_res = match crate::kms_flow::request_kms_ppc(&kms_url, &cid, &ip, "00:00:00:00:00:00").await {
         Ok(res) => res,
         Err(e) => {
             eprintln!("[KMS Relay] REQ-PPC error: {}", e);

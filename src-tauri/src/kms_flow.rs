@@ -90,11 +90,29 @@ pub struct PitResponse {
     pub rxss_iv_b64_len: Option<usize>,
 }
 
+/// Format MAC address to XX:XX:XX:XX:XX:XX uppercase standard as expected by Samsung Janus KMS
+pub fn format_mac_address(mac: &str) -> String {
+    let clean: String = mac.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+    if clean.len() == 12 {
+        format!(
+            "{}:{}:{}:{}:{}:{}",
+            &clean[0..2],
+            &clean[2..4],
+            &clean[4..6],
+            &clean[6..8],
+            &clean[8..10],
+            &clean[10..12]
+        ).to_uppercase()
+    } else {
+        "00:00:00:00:00:00".to_string()
+    }
+}
+
 /// Extract clean PS-S response line from AT+ENGMODES=1,3,1 output
 pub fn extract_pss_payload(raw: &str) -> Result<String, String> {
     for line in raw.lines() {
         let t = line.trim();
-        if t.starts_with("+ENGMODES:1,OK,") {
+        if t.starts_with("+ENGMODES:1,OK,") || t.starts_with("+ENGMODES:1,OK:") {
             return Ok(t.to_string());
         }
     }
@@ -104,21 +122,50 @@ pub fn extract_pss_payload(raw: &str) -> Result<String, String> {
     Err(format!("Invalid PS-S response from modem: {}", raw.trim()))
 }
 
-/// Extract 8-character CID from AT+ENGMODES=1,3,1 modem output as decompiled from JanusServiceAgent.dll
-pub fn extract_pss_cid(raw: &str) -> String {
+/// Extract genuine 8-character hardware CID from AT+ENGMODES=1,3,1 modem output as decompiled from JanusServiceAgent.dll
+///
+/// Supported variations:
+/// - Protocol 04: `+ENGMODES:1,OK,04,25112200`
+/// - Colon delimiter: `+ENGMODES:1,OK,04:2628701844800F74,SM-F971B`
+/// - Legacy protocol: `+ENGMODES:1,OK,25112200`
+pub fn extract_pss_cid(raw: &str) -> Result<String, String> {
     for line in raw.lines() {
         let t = line.trim();
-        if t.contains(',') {
-            let comma_parts: Vec<&str> = t.split(',').collect();
-            if comma_parts.len() >= 3 {
-                let part2 = comma_parts[2].trim();
-                if part2.len() >= 8 {
-                    return part2[..8].to_string();
+        if !t.starts_with("+ENGMODES:") && !t.contains("OK") {
+            continue;
+        }
+
+        // 1. Check if chunk contains colon-delimited token e.g. "04:26287018..."
+        for chunk in t.split(',') {
+            let chunk_trimmed = chunk.trim();
+            if let Some(colon_idx) = chunk_trimmed.find(':') {
+                let after_colon = chunk_trimmed[colon_idx + 1..].trim();
+                // Skip command index like +ENGMODES:1
+                if !(chunk_trimmed.starts_with("+ENGMODES") && after_colon.starts_with('1')) {
+                    let clean: String = after_colon.chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
+                    if clean.len() >= 8 {
+                        return Ok(clean[..8].to_uppercase());
+                    }
                 }
             }
         }
+
+        // 2. Comma-separated parts in reverse order (e.g. [+ENGMODES:1, OK, 04, 25112200])
+        let comma_parts: Vec<&str> = t.split(',').collect();
+        for part in comma_parts.iter().skip(1).rev() {
+            let p = part.trim();
+            let clean: String = p.chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
+            // Skip short tokens like "OK", "04", "01"
+            if clean.len() >= 8 {
+                return Ok(clean[..8].to_uppercase());
+            }
+        }
     }
-    format!("{:08X}", uuid::Uuid::new_v4().as_u128() as u32)
+
+    Err(format!(
+        "Modem PS-S output tidak mengandung 8-karakter CID perangkat yang valid. Raw: {}",
+        raw.trim()
+    ))
 }
 
 /// Construct AT+ENGMODES=0,1,... challenge command as decompiled from JanusServiceAgent.dll
@@ -317,7 +364,7 @@ pub async fn request_kms_ppc(
         .build()
         .map_err(|e| e.to_string())?;
 
-    let clean_mac = client_mac.replace(':', "").replace('-', "").to_uppercase();
+    let clean_mac = format_mac_address(client_mac);
 
     let req = PpcRequest {
         msg_type: "REQ-PPC".to_string(),
@@ -351,7 +398,16 @@ pub async fn request_kms_ppc(
         .map_err(|e| format!("Failed to parse KMS PPC response: {}", e))?;
 
     if ppc_res.ret_code != "S" && ppc_res.cert_b64.is_none() {
-        return Err(format!("KMS REQ-PPC rejected with code: {}", ppc_res.ret_code));
+        let code_desc = match ppc_res.ret_code.as_str() {
+            "0E" => " (Unknown / Unregistered Device CID)",
+            "01" => " (Unregistered user ID)",
+            "04" => " (User not permitted / missing mode permissions)",
+            "E0" => " (Authentication Failure E0)",
+            "E1" => " (Authentication Failure E1)",
+            "20" => " (Agent version outdated)",
+            _ => "",
+        };
+        return Err(format!("KMS REQ-PPC rejected with code: {}{}", ppc_res.ret_code, code_desc));
     }
 
     Ok(ppc_res)
@@ -372,7 +428,7 @@ pub async fn request_kms_pit(
         .build()
         .map_err(|e| e.to_string())?;
 
-    let clean_mac = client_mac.replace(':', "").replace('-', "").to_uppercase();
+    let clean_mac = format_mac_address(client_mac);
 
     let req = PitRequest {
         msg_type: "REQ-PIT".to_string(),
@@ -455,9 +511,17 @@ mod tests {
 
     #[test]
     fn test_extract_pss_cid() {
-        let raw = "+ENGMODES:1,OK,04:2628701844800F74,SM-F971B\r\nOK\r\n";
-        let cid = extract_pss_cid(raw);
-        assert_eq!(cid, "04:26287");
+        let raw1 = "+ENGMODES:1,OK,04,25112200\r\n\r\nOK\r\n";
+        assert_eq!(extract_pss_cid(raw1).unwrap(), "25112200");
+
+        let raw2 = "+ENGMODES:1,OK,04:2628701844800F74,SM-F971B\r\nOK\r\n";
+        assert_eq!(extract_pss_cid(raw2).unwrap(), "26287018");
+
+        let raw3 = "+ENGMODES:1,OK,25112200\r\nOK\r\n";
+        assert_eq!(extract_pss_cid(raw3).unwrap(), "25112200");
+
+        let raw_invalid = "+ENGMODES:1,OK,TOK,0_12_1_49\r\nOK\r\n";
+        assert!(extract_pss_cid(raw_invalid).is_err());
     }
 
     #[test]
