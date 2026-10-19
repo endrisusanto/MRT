@@ -321,7 +321,7 @@ pub fn handshake_device_session(port_path: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Parse device nonce from modem response wrapped in delimiter (@#)...(@#)
+/// Parse device nonce from modem response wrapped in delimiter (@#)...(@#) or +ENGMODES:0,OK lines
 pub fn parse_device_nonce(res: &str) -> Result<String, String> {
     if let Some(start_idx) = res.find("(@#)") {
         let after_start = &res[start_idx + 4..];
@@ -335,7 +335,10 @@ pub fn parse_device_nonce(res: &str) -> Result<String, String> {
 
     for line in res.lines() {
         let trimmed = line.trim();
-        if trimmed.contains("REQ-PIT") || trimmed.starts_with("+ENGMODES:0,1,") {
+        if trimmed.starts_with("+ENGMODES:0,OK") || trimmed.starts_with("+ENGMODES:0,") {
+            return Ok(trimmed.to_string());
+        }
+        if trimmed.contains("REQ-PIT") {
             let clean = trimmed
                 .replace("REQ-PIT", "")
                 .replace("+ENGMODES:0,1,", "")
@@ -368,11 +371,20 @@ pub fn acquire_device_nonce_with_challenge(port_path: &str, challenge_cmd_or_has
     let res = send_at(port_path, &cmd, 30000)
         .map_err(|e| format!("Gagal mengirim AT+ENGMODES=0,1 challenge: {}", e))?;
 
-    if res.contains("ERROR_INTERNAL") || res.contains("NG") {
+    // Check for explicit modem failure codes, avoiding false positives on "ENGMODES" or hex/base64 payload data
+    if res.contains("ERROR_INTERNAL") || res.contains("+ENGMODES:0,NG") || res.contains("+ENGMODES:NG") {
         return Err(format!("Device did not return a valid nonce payload: {}", res.trim()));
     }
 
-    if res.contains("+ENGMODES:0,OK:") || (res.contains("OK") && res.contains(':')) {
+    // Isolate and return the genuine modem response line starting with +ENGMODES:0,OK
+    for line in res.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("+ENGMODES:0,OK") {
+            return Ok(trimmed.to_string());
+        }
+    }
+
+    if res.contains("+ENGMODES:0,OK") || (res.contains("OK") && res.contains(':')) {
         return Ok(res);
     }
 

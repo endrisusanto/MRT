@@ -278,6 +278,22 @@ async fn install_handler(
     let modes_vec: Vec<i32> = selected_indices.clone().unwrap_or_else(|| vec![0, 1, 12, 49]);
     let auth_status = state.auth_manager.get_status();
     let user_id = auth_status.username.unwrap_or_else(|| "endri.s".to_string());
+    let device_cid = match crate::kms_flow::extract_pss_cid(&pss_payload) {
+        Ok(c) => c,
+        Err(e) => {
+            let err_msg = format!("Ekstraksi CID gagal: {}", e);
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(OperationResponse {
+                    task_id,
+                    serial,
+                    status: "FAILED".to_string(),
+                    progress: 0,
+                    message: err_msg,
+                }),
+            );
+        }
+    };
 
     // 5. Pre-flight check & Request PPC challenge command (REQ-PPC)
     let challenge_cmd: String = if is_relay {
@@ -286,24 +302,8 @@ async fn install_handler(
             lock.kms_endpoint.clone()
         };
         let ip = local_ip().map(|i| i.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string());
-        let cid = match crate::kms_flow::extract_pss_cid(&pss_payload) {
-            Ok(c) => c,
-            Err(e) => {
-                let err_msg = format!("Ekstraksi CID gagal: {}", e);
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(OperationResponse {
-                        task_id,
-                        serial,
-                        status: "FAILED".to_string(),
-                        progress: 0,
-                        message: err_msg,
-                    }),
-                );
-            }
-        };
 
-        let cert_b64 = match crate::kms_flow::request_kms_ppc(&kms_url, &cid, &ip, "00:00:00:00:00:00").await {
+        let cert_b64 = match crate::kms_flow::request_kms_ppc(&kms_url, &device_cid, &ip, "00:00:00:00:00:00").await {
             Ok(res) if res.cert_b64.is_some() => res.cert_b64.unwrap(),
             Ok(res) => {
                 let err_msg = format!("KMS REQ-PPC ditolak server dengan retCode: {}", res.ret_code);
@@ -489,7 +489,6 @@ async fn install_handler(
             lock.kms_endpoint.clone()
         };
         let ip = local_ip().map(|i| i.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string());
-        let cid = format!("MRT-PIT-{}", Uuid::new_v4().to_string().replace("-", ""));
 
         let nonce_obj = crate::kms_flow::parse_modem_pit_response(&device_nonce).unwrap_or_else(|_| {
             crate::kms_flow::ModemPitNonce {
@@ -508,9 +507,9 @@ async fn install_handler(
             &kms_url,
             &ad_token,
             &nonce_obj,
-            &cid,
+            &device_cid,
             &ip,
-            "000000000000",
+            "00:00:00:00:00:00",
         ).await {
             Ok(pit_res) => (
                 pit_res.e_token_b64.unwrap_or_default(),

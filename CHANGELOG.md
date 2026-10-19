@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.1.17] - 2026-10-19
+
+fix(kms): resolve REQ-PIT parsing for Protocol 04 and remove NG false-positive in ENGMODES
+
+
 ## [v2.1.16] - 2026-10-19
 
 Increase AT+ENGMODES challenge timeout to 30s to allow TrustZone signature verification

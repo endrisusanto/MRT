@@ -272,57 +272,36 @@ pub fn parse_modem_pit_response(raw: &str) -> Result<ModemPitNonce, String> {
     for line in raw.lines() {
         let t = line.trim();
 
-        // 1. If line contains "OK:" (standard modem response format +ENGMODES:0,OK:<eskLen>...)
-        if let Some(ok_idx) = t.find("OK:") {
-            let after_ok = &t[ok_idx + 3..];
-            let parts: Vec<&str> = after_ok.split(':').collect();
-            if parts.len() >= 7 {
-                let esk_len = parts[0].parse::<usize>().unwrap_or(0);
-                let esk_b64_len = parts[1].parse::<usize>().unwrap_or_else(|_| parts[2].len());
-                let esk_b64 = parts[2].to_string();
-                let erm_len = parts[3].parse::<usize>().unwrap_or(0);
-                let erm_b64_len = parts[4].parse::<usize>().unwrap_or_else(|_| parts[5].len());
-                let erm_b64 = parts[5].to_string();
-                let hash_b64 = parts[6].trim().to_string();
-
-                if !erm_b64.is_empty() {
-                    return Ok(ModemPitNonce {
-                        raw: t.to_string(),
-                        esk_len,
-                        esk_b64_len,
-                        esk_b64,
-                        erm_len,
-                        erm_b64_len,
-                        erm_b64,
-                        hash_b64,
-                    });
-                }
-            }
-        }
-
-        // 2. Direct parts[1..7] indexing from C# Substring(3)
+        // 1. Universal scan across colon-separated tokens for:
+        //    esk_len, esk_b64_len, esk_b64, erm_len, erm_b64_len, erm_b64, hash_b64
+        //    Handles both Protocol 04 (+ENGMODES:0,OK,04:512:684:...) and legacy (+ENGMODES:0,OK:256:344:...)
         if t.contains(':') {
             let parts: Vec<&str> = t.split(':').collect();
-            if parts.len() >= 8 {
-                let esk_len = parts[1].parse::<usize>().unwrap_or(0);
-                let esk_b64_len = parts[2].parse::<usize>().unwrap_or_else(|_| parts[3].len());
-                let esk_b64 = parts[3].to_string();
-                let erm_len = parts[4].parse::<usize>().unwrap_or(0);
-                let erm_b64_len = parts[5].parse::<usize>().unwrap_or_else(|_| parts[6].len());
-                let erm_b64 = parts[6].to_string();
-                let hash_b64 = parts[7].trim().to_string();
+            for i in 0..parts.len() {
+                if i + 6 < parts.len() {
+                    if let (Ok(esk_len), Ok(esk_b64_len), Ok(erm_len), Ok(erm_b64_len)) = (
+                        parts[i].trim().parse::<usize>(),
+                        parts[i + 1].trim().parse::<usize>(),
+                        parts[i + 3].trim().parse::<usize>(),
+                        parts[i + 4].trim().parse::<usize>(),
+                    ) {
+                        let esk_b64 = parts[i + 2].trim().to_string();
+                        let erm_b64 = parts[i + 5].trim().to_string();
+                        let hash_b64 = parts[i + 6].trim().to_string();
 
-                if !erm_b64.is_empty() && (esk_len > 0 || erm_len > 0) {
-                    return Ok(ModemPitNonce {
-                        raw: t.to_string(),
-                        esk_len,
-                        esk_b64_len,
-                        esk_b64,
-                        erm_len,
-                        erm_b64_len,
-                        erm_b64,
-                        hash_b64,
-                    });
+                        if !erm_b64.is_empty() {
+                            return Ok(ModemPitNonce {
+                                raw: t.to_string(),
+                                esk_len,
+                                esk_b64_len,
+                                esk_b64,
+                                erm_len,
+                                erm_b64_len,
+                                erm_b64,
+                                hash_b64,
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -531,6 +510,19 @@ mod tests {
         assert_eq!(nonce.esk_len, 256);
         assert_eq!(nonce.esk_b64, "SAMPLE_ESK_B64");
         assert_eq!(nonce.erm_len, 32);
+        assert_eq!(nonce.erm_b64, "SAMPLE_ERM_B64");
+        assert_eq!(nonce.hash_b64, "SAMPLE_HASH_B64");
+    }
+
+    #[test]
+    fn test_parse_modem_pit_response_protocol_04() {
+        let raw = "+ENGMODES:0,OK,04:512:684:SAMPLE_ESK_B64:273:364:SAMPLE_ERM_B64:SAMPLE_HASH_B64:\r\n\r\nOK\r\n";
+        let nonce = parse_modem_pit_response(raw).expect("Should parse Protocol 04 modem PIT response");
+        assert_eq!(nonce.esk_len, 512);
+        assert_eq!(nonce.esk_b64_len, 684);
+        assert_eq!(nonce.esk_b64, "SAMPLE_ESK_B64");
+        assert_eq!(nonce.erm_len, 273);
+        assert_eq!(nonce.erm_b64_len, 364);
         assert_eq!(nonce.erm_b64, "SAMPLE_ERM_B64");
         assert_eq!(nonce.hash_b64, "SAMPLE_HASH_B64");
     }
