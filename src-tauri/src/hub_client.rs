@@ -138,15 +138,17 @@ async fn execute_relay_task(
 
             let auth_status = auth_manager.get_status();
             let ad_token = auth_status.username.unwrap_or_else(|| "endri.s".to_string());
-            let cid = format!("MRT-PIT-{}", uuid::Uuid::new_v4().to_string().replace("-", ""));
+            let cid = payload.get("cid")
+                .and_then(|v| v.as_str())
+                .unwrap_or("25112200");
 
             match crate::kms_flow::request_kms_pit(
                 &kms_url,
                 &ad_token,
                 &nonce_obj,
-                &cid,
+                cid,
                 &ip,
-                "000000000000",
+                "00:00:00:00:00:00",
             ).await {
                 Ok(pit_res) => {
                     serde_json::json!({

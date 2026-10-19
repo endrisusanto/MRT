@@ -225,7 +225,7 @@ app.post('/api/relay/complete', (req, res) => {
 
 // Proxy token signing request to active Relay Agent
 app.post(['/api/relay/request-token', '/relay/request-token'], async (req, res) => {
-  const { serial, model, modes, device_nonce } = req.body;
+  const { serial, model, modes, device_nonce, cid } = req.body;
   const now = Date.now();
 
   const relayNode = Array.from(nodes.values()).find(
@@ -247,7 +247,7 @@ app.post(['/api/relay/request-token', '/relay/request-token'], async (req, res) 
     const relayRes = await fetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ serial, model, modes, device_nonce }),
+      body: JSON.stringify({ serial, model, modes, device_nonce, cid }),
       signal: ctrl.signal
     });
     clearTimeout(tId);
@@ -261,7 +261,7 @@ app.post(['/api/relay/request-token', '/relay/request-token'], async (req, res) 
 
   // 2. Fallback to reverse task queue
   try {
-    const result = await dispatchTask('REQUEST_TOKEN', { serial, model, modes, device_nonce });
+    const result = await dispatchTask('REQUEST_TOKEN', { serial, model, modes, device_nonce, cid });
     res.json(result);
   } catch (err) {
     res.status(502).json({

@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.1.19] - 2026-10-19
+
+fix(relay): pass genuine device CID in hub_client relay worker and dashboard queue
+
+
 ## [v2.1.18] - 2026-10-19
 
 fix(kms): set userType to empty string in REQ-PIT and pass genuine device CID across relay flow
