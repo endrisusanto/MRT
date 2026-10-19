@@ -327,10 +327,11 @@ pub async fn request_kms_ppc(
         mac: clean_mac,
     };
 
-    let url = if kms_endpoint.ends_with('/') {
-        kms_endpoint.to_string()
+    let base = kms_endpoint.trim_end_matches('/');
+    let url = if base.ends_with("REQ-PPC") {
+        base.to_string()
     } else {
-        format!("{}/", kms_endpoint)
+        format!("{}/REQ-PPC", base)
     };
 
     let res = client
@@ -395,10 +396,11 @@ pub async fn request_kms_pit(
         cid: cid.to_string(),
     };
 
-    let url = if kms_endpoint.ends_with('/') {
-        kms_endpoint.to_string()
+    let base = kms_endpoint.trim_end_matches('/');
+    let url = if base.ends_with("REQ-PIT") {
+        base.to_string()
     } else {
-        format!("{}/", kms_endpoint)
+        format!("{}/REQ-PIT", base)
     };
 
     let res = client
