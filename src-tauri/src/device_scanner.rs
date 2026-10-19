@@ -98,7 +98,7 @@ pub fn get_windows_pnp_devices() -> (HashMap<String, String>, Vec<(String, Strin
     let mut serial_to_port = HashMap::new();
     let mut pnp_devices = Vec::new();
 
-    let ps_cmd = "Get-CimInstance Win32_PnPEntity | Where-Object { $_.DeviceID -match 'VID_04E8|VID_18D1' } | ForEach-Object { \"$($_.DeviceID)||$($_.Name)||$($_.Caption)\" }";
+    let ps_cmd = "Get-CimInstance Win32_PnPEntity -Filter \"DeviceID like '%VID_04E8%' or DeviceID like '%VID_18D1%'\" | ForEach-Object { \"$($_.DeviceID)||$($_.Name)||$($_.Caption)\" }";
     if let Ok(output) = silent_command("powershell").args(["-NoProfile", "-Command", ps_cmd]).output() {
         if let Ok(text) = String::from_utf8(output.stdout) {
             let mut found_serials = Vec::new();
@@ -124,11 +124,17 @@ pub fn get_windows_pnp_devices() -> (HashMap<String, String>, Vec<(String, Strin
                     if dev_id.starts_with("USB\\") && !dev_id.contains("&MI_") {
                         if let Some(last_slash) = dev_id.rfind('\\') {
                             let serial = dev_id[last_slash + 1..].trim();
-                            if !serial.is_empty() && !serial.contains('&') {
+                            if !serial.is_empty() {
                                 found_serials.push((serial.to_string(), name.to_string()));
                             }
                         }
                     }
+                }
+            }
+
+            if found_serials.is_empty() {
+                for port in &modem_ports {
+                    found_serials.push((format!("MODEM-{}", port), format!("Samsung Modem ({})", port)));
                 }
             }
 

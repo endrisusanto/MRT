@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.1.21] - 2026-10-19
+
+fix(hub): non-blocking heartbeat, direct tauri ipc device fetch, and fast wql pnp query
+
+
 ## [v2.1.20] - 2026-10-19
 
 feat(legacy): add official Samsung Station SDK integration for C:\windows_v1.0.4 fallback

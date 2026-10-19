@@ -11,7 +11,8 @@ pub async fn start_heartbeat_loop(
     auth_manager: crate::auth_manager::AuthManager,
 ) {
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(8))
+        .danger_accept_invalid_certs(true)
         .build()
         .unwrap_or_default();
 
@@ -31,11 +32,9 @@ pub async fn start_heartbeat_loop(
     });
 
     loop {
+        // Read devices asynchronously populated by the background scanner
         let devices = {
-            let mut lock = cached_devices.lock().unwrap();
-            if lock.is_empty() {
-                *lock = crate::device_scanner::scan_devices();
-            }
+            let lock = cached_devices.lock().unwrap();
             lock.clone()
         };
 
@@ -51,7 +50,16 @@ pub async fn start_heartbeat_loop(
             timestamp: chrono::Utc::now().to_rfc3339(),
         };
 
-        let _ = client.post(&register_endpoint).json(&heartbeat).send().await;
+        match client.post(&register_endpoint).json(&heartbeat).send().await {
+            Ok(res) => {
+                if !res.status().is_success() {
+                    eprintln!("[Hub Client] Heartbeat responded with status: {}", res.status());
+                }
+            }
+            Err(e) => {
+                eprintln!("[Hub Client] Heartbeat failed to send to {}: {}", register_endpoint, e);
+            }
+        }
 
         sleep(Duration::from_secs(10)).await;
     }
@@ -182,6 +190,7 @@ pub async fn start_relay_worker_loop(
 ) {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(35))
+        .danger_accept_invalid_certs(true)
         .build()
         .unwrap_or_default();
 

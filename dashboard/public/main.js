@@ -247,14 +247,29 @@
     }
   }
 
+  async function tauriInvoke(cmd, args) {
+    if (window.__TAURI__) {
+      const inv = window.__TAURI__.core?.invoke || window.__TAURI__.invoke;
+      if (typeof inv === 'function') {
+        try {
+          return await inv(cmd, args);
+        } catch (e) {
+          console.warn(`[Tauri IPC] ${cmd} error:`, e);
+        }
+      }
+    }
+    return null;
+  }
+
   // --- Fetch Data ---
   async function fetchData() {
     try {
       const isLocal = isLocalClient();
 
-      // 1. Fetch devices: in local desktop app (Tauri/localhost), priority is local node daemon
-      let devices = [];
-      if (isLocal) {
+      // 1. Fetch devices: in local desktop app (Tauri IPC), direct query
+      let devices = await tauriInvoke('get_devices');
+
+      if ((!devices || devices.length === 0) && isLocal) {
         try {
           const res = await fetch('http://127.0.0.1:7890/devices');
           if (res.ok) {
@@ -288,9 +303,18 @@
         return !m.includes('PSSD') && !m.includes('SSD') && !m.includes('FLASH') && !m.includes('STORAGE') && !m.includes('HUB');
       });
 
-      // 2. Fetch node info
+      // 2. Fetch node info: in local desktop app (Tauri IPC), direct query
       let nodes = [];
-      if (isLocal) {
+      const localNode = await tauriInvoke('get_node_info');
+      if (localNode) {
+        nodes = [localNode];
+        if (localNode.version) {
+          const vTag = document.getElementById('app-version-tag');
+          if (vTag) vTag.textContent = `v${localNode.version}`;
+        }
+      }
+
+      if (nodes.length === 0 && isLocal) {
         try {
           const res = await fetch('http://127.0.0.1:7890/info');
           if (res.ok) {

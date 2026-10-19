@@ -2407,7 +2407,7 @@ dependencies = [
 
 [[package]]
 name = "mrt-station"
-version = "2.1.20"
+version = "2.1.21"
 dependencies = [
  "axum",
  "base64 0.22.1",

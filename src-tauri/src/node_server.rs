@@ -47,7 +47,7 @@ pub async fn start_node_server(
             *lock = initial;
         }
         loop {
-            tokio::time::sleep(tokio::time::Duration::from_millis(3000)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(5000)).await;
             if let Ok(scanned) = tokio::task::spawn_blocking(scan_devices).await {
                 let mut lock = bg_devices.lock().unwrap();
                 *lock = scanned;
