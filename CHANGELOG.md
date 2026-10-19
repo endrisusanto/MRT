@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.1.20] - 2026-10-19
+
+feat(legacy): add official Samsung Station SDK integration for C:\windows_v1.0.4 fallback
+
+
 ## [v2.1.19] - 2026-10-19
 
 fix(relay): pass genuine device CID in hub_client relay worker and dashboard queue

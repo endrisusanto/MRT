@@ -13,6 +13,8 @@ pub struct AuthConfig {
     pub sso_password: String,
     pub auto_login: bool,
     pub auto_refresh: bool,
+    #[serde(default)]
+    pub legacy_path: Option<String>,
 }
 
 impl Default for AuthConfig {
@@ -25,6 +27,7 @@ impl Default for AuthConfig {
             sso_password: String::new(),
             auto_login: true,
             auto_refresh: true,
+            legacy_path: Some(r"C:\windows_v1.0.4".to_string()),
         }
     }
 }
@@ -55,8 +58,10 @@ pub struct AuthManager {
 impl AuthManager {
     pub fn new() -> Self {
         let env_relay = std::env::var("MRT_RELAY_URL").ok().filter(|s| !s.is_empty());
+        let env_legacy = std::env::var("MRT_LEGACY_DIR").ok().filter(|s| !s.is_empty());
         let default_config = AuthConfig {
             relay_url: env_relay,
+            legacy_path: env_legacy.or_else(|| Some(r"C:\windows_v1.0.4".to_string())),
             ..Default::default()
         };
 
@@ -83,6 +88,11 @@ impl AuthManager {
         } else {
             lock.relay_url.clone().filter(|s| !s.is_empty())
         }
+    }
+
+    pub fn get_legacy_path(&self) -> Option<String> {
+        let lock = self.config.read().unwrap();
+        lock.legacy_path.clone().filter(|s| !s.is_empty())
     }
 
     pub fn get_status(&self) -> SessionStatus {

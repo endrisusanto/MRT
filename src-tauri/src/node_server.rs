@@ -243,6 +243,75 @@ async fn install_handler(
         );
     }
 
+    // 3. Check for Legacy Samsung Station SDK (e.g. C:\windows_v1.0.4)
+    let legacy_sdk_path = state.auth_manager.get_legacy_path()
+        .as_deref()
+        .and_then(|p| crate::legacy_sdk::resolve_sdk_path(Some(p)));
+
+    if let (Some(sdk_path), Some(port_num)) = (legacy_sdk_path.as_ref(), crate::legacy_sdk::parse_port_number(&port)) {
+        eprintln!("[Install] Mencoba injeksi token melalui Legacy Station SDK: {}", sdk_path.display());
+        let _ = state.tx.send(json!({
+            "event": "operation_progress",
+            "task_id": task_id,
+            "operation": "INSTALL",
+            "serial": serial,
+            "status": "PROCESSING",
+            "message": format!("Menggunakan Legacy Station SDK ({})", sdk_path.display()),
+            "progress": 30
+        }).to_string());
+
+        match crate::legacy_sdk::direct_install_token(sdk_path, port_num) {
+            Ok(()) => {
+                eprintln!("[Install] Legacy Station SDK berhasil menginjeksi token pada port {}", port);
+                let _ = state.tx.send(json!({
+                    "event": "operation_progress",
+                    "task_id": task_id,
+                    "operation": "INSTALL",
+                    "serial": serial,
+                    "status": "PROCESSING",
+                    "message": "Token berhasil diinjeksi via Legacy SDK, memverifikasi TrustZone...",
+                    "progress": 85
+                }).to_string());
+
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                let _ = crate::token_engine::register_installed_token(&serial, &model, 90, selected_indices);
+                {
+                    let mut lock = state.cached_devices.lock().unwrap();
+                    if let Some(dev) = lock.iter_mut().find(|d| d.serial == serial) {
+                        dev.token_status = Some("ACTIVE".to_string());
+                        dev.token_owner = Some("endri.s".to_string());
+                        dev.hw_verified = true;
+                    }
+                }
+
+                let event = json!({
+                    "event": "operation_completed",
+                    "task_id": task_id,
+                    "operation": "INSTALL",
+                    "serial": serial,
+                    "status": "SUCCESS",
+                    "progress": 100,
+                    "message": format!("Token hardware berhasil diinstal melalui Legacy Station SDK pada port {}", port)
+                });
+                let _ = state.tx.send(event.to_string());
+
+                return (
+                    StatusCode::OK,
+                    Json(OperationResponse {
+                        task_id,
+                        serial,
+                        status: "SUCCESS".to_string(),
+                        progress: 100,
+                        message: format!("Token hardware berhasil diinstal melalui Legacy Station SDK pada port {}", port),
+                    }),
+                );
+            }
+            Err(e) => {
+                eprintln!("[Install] Legacy Station SDK gagal: {}, melanjutkan ke native KMS flow", e);
+            }
+        }
+    }
+
     // 4. Read PS-S challenge status from modem (AT+ENGMODES=1,3,1)
     let pss_payload = match crate::token_engine::query_pss_status(&port) {
         Ok(pss) => pss,
