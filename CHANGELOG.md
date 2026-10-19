@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.1.15] - 2026-10-19
+
+chore(release): bump version and publish artifacts
+
+
 ## [v2.1.11] - 2026-10-16
 
 chore(release): bump version and publish artifacts
