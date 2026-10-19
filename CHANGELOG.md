@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.1.22] - 2026-10-19
+
+fix(kms): fix REQ-PIT 0B invalid parameter by setting userType Personal and essId JanusPlatform, support legacy add_mode
+
+
 ## [v2.1.21] - 2026-10-19
 
 fix(hub): non-blocking heartbeat, direct tauri ipc device fetch, and fast wql pnp query

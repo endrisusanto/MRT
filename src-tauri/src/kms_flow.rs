@@ -412,10 +412,10 @@ pub async fn request_kms_pit(
     let req = PitRequest {
         msg_type: "REQ-PIT".to_string(),
         prot_ver: "04".to_string(),
-        user_type: "".to_string(),
+        user_type: "Personal".to_string(),
         auth: ad_token.to_string(),
         auth_len: ad_token.len(),
-        ess_id: "".to_string(),
+        ess_id: "JanusPlatform".to_string(),
         ip: client_ip.to_string(),
         mac: clean_mac,
         eei_len: 0,

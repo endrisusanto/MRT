@@ -55,10 +55,10 @@ def main():
     payload = {
         "msgType": "REQ-PIT",
         "protVer": "04",
-        "userType": args.user_type,
+        "userType": args.user_type if args.user_type else "Personal",
         "auth": args.ad_token,
         "authLen": len(args.ad_token),
-        "essId": "",
+        "essId": "JanusPlatform",
         "ip": args.ip,
         "mac": args.mac,
         "eeiLen": 0,

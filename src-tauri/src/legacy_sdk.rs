@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 type Initialize = unsafe extern "C" fn();
 #[cfg(target_os = "windows")]
+type AddMode = unsafe extern "C" fn(c_int) -> c_int;
+#[cfg(target_os = "windows")]
 type AddDevice = unsafe extern "C" fn(c_int) -> c_int;
 #[cfg(target_os = "windows")]
 type InstallToken = unsafe extern "C" fn(c_int) -> c_int;
@@ -26,26 +28,38 @@ type RemoveToken = unsafe extern "C" fn(*mut c_void) -> c_int;
 pub fn resolve_sdk_path(legacy_path: Option<&str>) -> Option<PathBuf> {
     let mut candidates = Vec::new();
 
-    if let Some(p) = legacy_path {
-        let base = Path::new(p);
+    let mut check_base = |base: &Path| {
         candidates.push(base.join("data").join("flutter_assets").join("assets").join("sdk").join("JPCWrapperDll.dll"));
         candidates.push(base.join("JPCWrapperDll.dll"));
         candidates.push(base.join("data").join("flutter_assets").join("assets").join("sdk").join("libJpClientManager.so"));
         candidates.push(base.join("libJpClientManager.so"));
         candidates.push(base.to_path_buf());
+
+        // Check subdirectories (e.g. extracted Station_windows_v1.0.12 folder)
+        if let Ok(entries) = std::fs::read_dir(base) {
+            for entry in entries.flatten() {
+                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    let sub = entry.path();
+                    candidates.push(sub.join("data").join("flutter_assets").join("assets").join("sdk").join("JPCWrapperDll.dll"));
+                    candidates.push(sub.join("JPCWrapperDll.dll"));
+                    candidates.push(sub.join("data").join("flutter_assets").join("assets").join("sdk").join("libJpClientManager.so"));
+                    candidates.push(sub.join("libJpClientManager.so"));
+                }
+            }
+        }
+    };
+
+    if let Some(p) = legacy_path {
+        check_base(Path::new(p));
     }
 
     if let Ok(env_p) = std::env::var("MRT_LEGACY_DIR") {
-        let base = PathBuf::from(env_p);
-        candidates.push(base.join("data").join("flutter_assets").join("assets").join("sdk").join("JPCWrapperDll.dll"));
-        candidates.push(base.join("JPCWrapperDll.dll"));
-        candidates.push(base.join("data").join("flutter_assets").join("assets").join("sdk").join("libJpClientManager.so"));
-        candidates.push(base.join("libJpClientManager.so"));
+        check_base(Path::new(&env_p));
     }
 
-    let default_base = Path::new(r"C:\windows_v1.0.4");
-    candidates.push(default_base.join("data").join("flutter_assets").join("assets").join("sdk").join("JPCWrapperDll.dll"));
-    candidates.push(default_base.join("JPCWrapperDll.dll"));
+    check_base(Path::new(r"C:\windows_v1.0.4"));
+    check_base(Path::new(r"C:\Station_windows_v1.0.12"));
+    check_base(Path::new(r"C:\Station"));
 
     candidates.into_iter().find(|p| p.is_file())
 }
@@ -81,6 +95,11 @@ pub fn direct_install_token(library_path: &Path, port_num: i32) -> Result<(), St
         {
             if let Ok(init) = library.get::<Initialize>(b"JPC_initialize\0") {
                 init();
+            }
+            if let Ok(add_mode) = library.get::<AddMode>(b"JPC_add_request_mode\0") {
+                for m in &[0, 1, 12, 49] {
+                    let _ = add_mode(*m as c_int);
+                }
             }
             let add_device: libloading::Symbol<AddDevice> = library
                 .get(b"JPC_add_request_device\0")
