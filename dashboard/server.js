@@ -151,6 +151,38 @@ app.post('/api/operations', async (req, res) => {
   }
 });
 
+// Proxy query token status to hosting node
+app.post('/api/devices/:serial/query', async (req, res) => {
+  const { serial } = req.params;
+  const now = Date.now();
+  let targetNode = null;
+
+  for (const [_, node] of nodes.entries()) {
+    if (now - node.lastSeen < 35000 && Array.isArray(node.devices)) {
+      if (node.devices.some((d) => d.serial === serial)) {
+        targetNode = node;
+        break;
+      }
+    }
+  }
+
+  if (!targetNode) {
+    return res.status(404).json({ error: 'Perangkat tidak ditemukan pada node yang sedang online' });
+  }
+
+  try {
+    const targetUrl = `http://${targetNode.ip}:${targetNode.port || 7890}/devices/${encodeURIComponent(serial)}/query`;
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(502).json({ error: 'Gagal menghubungi node agent', message: err.message });
+  }
+});
+
 // Reverse Task Queue for Relay Agents behind NAT
 const pendingTasks = new Map();
 const waitingPollers = [];

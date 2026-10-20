@@ -146,6 +146,55 @@ fn execute_operation(
             progress: 100,
             message: "Token offline berhasil dicabut (AT+ENGMODES=0,0,3,0)".to_string(),
         }
+    } else if operation == "QUERY" || operation == "REFRESH" {
+        // ponytail: direct live query from device modem TrustZone SE
+        let port_opt = {
+            let lock = state.cached_devices.lock().unwrap();
+            lock.iter().find(|d| d.serial == serial).and_then(|d| d.port_name.clone())
+        }.or_else(|| crate::device_scanner::find_port_for_serial(&serial));
+
+        if let Some(ref port) = port_opt {
+            let res = crate::token_engine::query_device_token(port);
+            let mut lock = state.cached_devices.lock().unwrap();
+            if let Some(dev) = lock.iter_mut().find(|d| d.serial == serial) {
+                if let Some(ref tok) = res {
+                    dev.token_status = Some(tok.status.clone());
+                    dev.token_owner = tok.owner.clone();
+                    dev.token_expires = tok.expires.clone();
+                    dev.active_modes = tok.active_modes.clone();
+                    dev.mode_quotas = tok.quotas.clone();
+                    dev.agent_status = "INSTALLED".to_string();
+                    dev.hw_verified = true;
+                    if let Some(ref m) = tok.model {
+                        dev.model = m.clone();
+                    }
+                } else {
+                    dev.token_status = Some("NONE".to_string());
+                    dev.agent_status = "NOT_INSTALLED".to_string();
+                    dev.hw_verified = false;
+                }
+            }
+            let msg = if let Some(tok) = res {
+                format!("Token aktif: {} (Owner: {}, Expired: {})", tok.token_id.unwrap_or_default(), tok.owner.unwrap_or_default(), tok.expires.unwrap_or_default())
+            } else {
+                format!("Tidak ada token aktif pada port {}", port)
+            };
+            OperationResponse {
+                task_id,
+                serial,
+                status: "COMPLETED".to_string(),
+                progress: 100,
+                message: msg,
+            }
+        } else {
+            OperationResponse {
+                task_id,
+                serial,
+                status: "FAILED".to_string(),
+                progress: 0,
+                message: "Port modem tidak ditemukan untuk perangkat ini".to_string(),
+            }
+        }
     } else {
         OperationResponse {
             task_id,

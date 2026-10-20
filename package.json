@@ -1,7 +1,7 @@
 {
   "name": "mrt-station",
   "private": true,
-  "version": "2.1.22",
+  "version": "2.2.0",
   "type": "module",
   "scripts": {
     "dev": "tauri dev",

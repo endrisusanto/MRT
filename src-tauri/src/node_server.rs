@@ -73,6 +73,8 @@ pub async fn start_node_server(
         .route("/health", get(health_handler))
         .route("/info", get(info_handler))
         .route("/devices", get(devices_handler))
+        .route("/devices/refresh", post(refresh_devices_handler))
+        .route("/devices/:serial/query", post(query_device_handler))
         .route("/devices/:serial/install", post(install_handler))
         .route("/devices/:serial/uninstall", post(uninstall_handler))
         .route("/devices/:serial/remove-token", post(remove_token_handler))
@@ -140,6 +142,89 @@ async fn devices_handler(State(state): State<AppState>) -> impl IntoResponse {
         lock.clone()
     };
     Json(cached)
+}
+
+// ponytail: immediately rescan all connected devices and update cache
+async fn refresh_devices_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let scanned = tokio::task::spawn_blocking(scan_devices).await.unwrap_or_default();
+    {
+        let mut lock = state.cached_devices.lock().unwrap();
+        *lock = scanned.clone();
+    }
+    let _ = state.tx.send(json!({
+        "event": "devices_refreshed",
+        "count": scanned.len()
+    }).to_string());
+    Json(scanned)
+}
+
+// ponytail: immediately probe TrustZone SE token status via AT+ENGMODES=9,0
+async fn query_device_handler(
+    Path(serial): Path<String>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let task_id = Uuid::new_v4().to_string();
+    let port_opt = {
+        let lock = state.cached_devices.lock().unwrap();
+        lock.iter().find(|d| d.serial == serial).and_then(|d| d.port_name.clone())
+    }.or_else(|| crate::device_scanner::find_port_for_serial(&serial));
+
+    if let Some(port) = port_opt {
+        let tok_res = tokio::task::spawn_blocking(move || {
+            crate::token_engine::query_device_token(&port)
+        }).await.unwrap_or(None);
+
+        let mut lock = state.cached_devices.lock().unwrap();
+        if let Some(dev) = lock.iter_mut().find(|d| d.serial == serial) {
+            if let Some(ref tok) = tok_res {
+                dev.token_status = Some(tok.status.clone());
+                dev.token_owner = tok.owner.clone();
+                dev.token_expires = tok.expires.clone();
+                dev.active_modes = tok.active_modes.clone();
+                dev.mode_quotas = tok.quotas.clone();
+                dev.agent_status = "INSTALLED".to_string();
+                dev.hw_verified = true;
+                if let Some(ref m) = tok.model {
+                    dev.model = m.clone();
+                }
+            } else {
+                dev.token_status = Some("NONE".to_string());
+                dev.agent_status = "NOT_INSTALLED".to_string();
+                dev.hw_verified = false;
+            }
+        }
+
+        let msg = if let Some(ref tok) = tok_res {
+            format!("Token aktif: {} (Owner: {}, Expired: {})", tok.token_id.as_deref().unwrap_or(""), tok.owner.as_deref().unwrap_or(""), tok.expires.as_deref().unwrap_or(""))
+        } else {
+            "Tidak ada token terpasang di TrustZone hardware".to_string()
+        };
+
+        let event = json!({
+            "event": "device_queried",
+            "task_id": task_id,
+            "serial": serial,
+            "status": "COMPLETED",
+            "message": msg
+        });
+        let _ = state.tx.send(event.to_string());
+
+        (StatusCode::OK, Json(OperationResponse {
+            task_id,
+            serial,
+            status: "COMPLETED".to_string(),
+            progress: 100,
+            message: msg,
+        }))
+    } else {
+        (StatusCode::NOT_FOUND, Json(OperationResponse {
+            task_id,
+            serial,
+            status: "FAILED".to_string(),
+            progress: 0,
+            message: "Port modem tidak ditemukan untuk perangkat ini".to_string(),
+        }))
+    }
 }
 
 async fn install_handler(

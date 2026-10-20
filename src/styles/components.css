@@ -759,10 +759,52 @@
   border: 1px solid var(--status-fail-border);
 }
 
+.token-status-pill.warning {
+  background-color: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+  border: 1px solid rgba(234, 179, 8, 0.35);
+}
+
 .token-status-pill.flashing {
   background-color: var(--status-flashing-bg);
   color: var(--status-flashing-text);
   border: 1px solid var(--status-flashing-border);
+}
+
+.device-expire-pill {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.device-countdown-badge {
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 1px 5px;
+  display: inline-block;
+  width: fit-content;
+}
+
+.device-countdown-badge.active {
+  color: var(--status-ready-text);
+  background-color: var(--status-ready-bg);
+}
+
+.device-countdown-badge.warning {
+  color: #eab308;
+  background-color: rgba(234, 179, 8, 0.15);
+}
+
+.device-countdown-badge.expired {
+  color: var(--status-fail-text);
+  background-color: var(--status-fail-bg);
+}
+
+.device-owner-tag {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
 }
 
 .device-expire-date {

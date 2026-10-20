@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.2.0] - 2026-10-20
+
+feat: pivot to pure token monitoring and fleet expiration sentinel
+
+
 ## [v2.1.22] - 2026-10-19
 
 fix(kms): fix REQ-PIT 0B invalid parameter by setting userType Personal and essId JanusPlatform, support legacy add_mode

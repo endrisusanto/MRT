@@ -353,13 +353,50 @@
     }
   }
 
+  // ponytail: calculate days remaining from YYYY-MM-DD expiration string
+  function getDaysRemaining(expiresStr) {
+    if (!expiresStr || expiresStr === '-' || expiresStr === 'None') return null;
+    const parts = expiresStr.split('-');
+    if (parts.length === 3) {
+      const expDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      const now = new Date();
+      expDate.setHours(0, 0, 0, 0);
+      now.setHours(0, 0, 0, 0);
+      return Math.round((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    }
+    return null;
+  }
+
   function updateStats() {
-    // ponytail: solid status - only hardware-verified active tokens count
-    const activeTokens = allDevices.filter(d => d.token_status === 'ACTIVE' && Boolean(d.hw_verified)).length;
+    let activeCount = 0;
+    let warningCount = 0;
+    let noneCount = 0;
+
+    for (const d of allDevices) {
+      const hwVerified = Boolean(d.hw_verified);
+      const isTokenActive = d.token_status === 'ACTIVE' && hwVerified;
+      if (isTokenActive) {
+        const days = getDaysRemaining(d.token_expires);
+        if (days !== null && days < 0) {
+          noneCount += 1;
+        } else if (days !== null && days <= 14) {
+          warningCount += 1;
+        } else {
+          activeCount += 1;
+        }
+      } else {
+        noneCount += 1;
+      }
+    }
 
     if (statPillNodes) statPillNodes.textContent = allNodes.length || 1;
     if (statPillDevices) statPillDevices.textContent = allDevices.length;
-    if (statPillTokens) statPillTokens.textContent = activeTokens;
+    if (statPillTokens) statPillTokens.textContent = activeCount;
+
+    const statWarning = document.getElementById('stat-warning-count');
+    if (statWarning) statWarning.textContent = warningCount;
+    const statNone = document.getElementById('stat-none-count');
+    if (statNone) statNone.textContent = noneCount;
 
     if (statActiveNodes) statActiveNodes.textContent = allNodes.length || 1;
     if (statTotalDevices) statTotalDevices.textContent = allDevices.length;
@@ -527,23 +564,53 @@
         </span>`;
       }
 
-      // Token status badge with icon (same uniform width)
-      let statusHtml = `
-        <span class="token-status-pill none">
-          <svg class="badge-icon"><use href="#icon-x-circle"></use></svg>
-          No Token
-        </span>
-      `;
-      let expireHtml = '<span class="device-expire-muted">-</span>';
+      // Days remaining & expiration display
+      const days = getDaysRemaining(d.token_expires);
+      let statusHtml;
+      let expireHtml;
 
       if (isTokenActive) {
-        statusHtml = `
-          <span class="token-status-pill active" title="Owner: ${escapeHtml(d.token_owner || 'user')}">
-            <svg class="badge-icon"><use href="#icon-check-circle"></use></svg>
-            Active
-          </span>
-        `;
-        expireHtml = `<span class="device-expire-date">${escapeHtml(d.token_expires || '-')}</span>`;
+        if (days !== null && days < 0) {
+          statusHtml = `
+            <span class="token-status-pill expired">
+              <svg class="badge-icon"><use href="#icon-x-circle"></use></svg>
+              Expired
+            </span>
+          `;
+          expireHtml = `
+            <div class="device-expire-pill">
+              <span class="device-expire-date">${escapeHtml(d.token_expires || '-')}</span>
+              <span class="device-countdown-badge expired">Expired</span>
+            </div>
+          `;
+        } else if (days !== null && days <= 14) {
+          statusHtml = `
+            <span class="token-status-pill warning" title="Masa berlaku tinggal ${days} hari">
+              <svg class="badge-icon"><use href="#icon-alert-triangle"></use></svg>
+              Segera Habis
+            </span>
+          `;
+          expireHtml = `
+            <div class="device-expire-pill">
+              <span class="device-expire-date">${escapeHtml(d.token_expires || '-')}</span>
+              <span class="device-countdown-badge warning">${days} hari lagi</span>
+            </div>
+          `;
+        } else {
+          const daysText = days !== null ? `${days} hari lagi` : 'Aktif';
+          statusHtml = `
+            <span class="token-status-pill active" title="Owner: ${escapeHtml(d.token_owner || 'user')}">
+              <svg class="badge-icon"><use href="#icon-check-circle"></use></svg>
+              Aktif
+            </span>
+          `;
+          expireHtml = `
+            <div class="device-expire-pill">
+              <span class="device-expire-date">${escapeHtml(d.token_expires || '-')}</span>
+              <span class="device-countdown-badge active">${daysText}</span>
+            </div>
+          `;
+        }
       } else if (d.token_status === 'EXPIRED') {
         statusHtml = `
           <span class="token-status-pill expired">
@@ -552,6 +619,14 @@
           </span>
         `;
         expireHtml = `<span class="device-expire-date">${escapeHtml(d.token_expires || '-')}</span>`;
+      } else {
+        statusHtml = `
+          <span class="token-status-pill none">
+            <svg class="badge-icon"><use href="#icon-x-circle"></use></svg>
+            No Token
+          </span>
+        `;
+        expireHtml = '<span class="device-expire-muted">-</span>';
       }
 
       // In-row progress indicator (Octopus continuous left-to-right bar + metric text)
@@ -570,7 +645,7 @@
         `;
         progressBarRowHtml = `
           <tr class="device-progress-track-row" data-serial="${escapeHtml(d.serial)}">
-            <td colspan="9" class="device-progress-track-cell">
+            <td colspan="10" class="device-progress-track-cell">
               <div class="device-progress-fill-bar" style="width: ${pct}%;"></div>
             </td>
           </tr>
@@ -588,16 +663,17 @@
             <span class="device-serial">${escapeHtml(d.serial)}</span>
           </td>
           <td style="text-align: center;">${statusHtml}</td>
-          <td style="text-align: center;">${hwBadgeHtml}</td>
+          <td style="text-align: center;"><span class="device-owner-tag">${escapeHtml(d.token_owner || '-')}</span></td>
           <td>${expireHtml}</td>
           <td><div class="active-mode-badges">${modesHtml}</div></td>
+          <td style="text-align: center;">${hwBadgeHtml}</td>
           <td style="text-align: right;">
             <div style="display: inline-flex; gap: 6px; align-items: center; justify-content: flex-end;">
               ${progressMetricHtml}
-              <button class="btn btn-secondary btn-sm btn-install-single" data-serial="${escapeHtml(d.serial)}" ${progress ? 'disabled' : ''} title="Install 4 selected modes">
-                Install
+              <button class="btn btn-secondary btn-sm btn-query-single" data-serial="${escapeHtml(d.serial)}" ${progress ? 'disabled' : ''} title="Periksa status token via AT+ENGMODES=9,0">
+                Periksa
               </button>
-              <button class="btn btn-danger btn-sm btn-remove-single" data-serial="${escapeHtml(d.serial)}" ${progress ? 'disabled' : ''} title="Remove token offline via modem AT">
+              <button class="btn btn-danger btn-sm btn-remove-single" data-serial="${escapeHtml(d.serial)}" ${progress ? 'disabled' : ''} title="Cabut token offline via modem AT">
                 Hapus
               </button>
             </div>
@@ -631,11 +707,11 @@
       });
     });
 
-    // Single install button
-    document.querySelectorAll('.btn-install-single').forEach(btn => {
+    // Single query / periksa button
+    document.querySelectorAll('.btn-query-single').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const serial = e.target.getAttribute('data-serial');
-        installModes([serial]);
+        queryDevices([serial]);
       });
     });
 
@@ -691,52 +767,51 @@
   }
 
   // --- Operations with In-Row Progress & Live Terminal Logging ---
-  async function installModes(serials) {
+  async function queryDevices(serials) {
     if (!serials || serials.length === 0) {
-      showToast('Pilih setidaknya 1 perangkat untuk instalasi mode', 'error');
+      showToast('Pilih setidaknya 1 perangkat untuk periksa status token', 'error');
       return;
     }
 
-    const modes = Array.from(selectedModes);
-    showToast(`Memulai instalasi mode [${modes.join(', ')}] pada ${serials.length} unit...`, 'info');
+    showToast(`Memeriksa status token TrustZone hardware pada ${serials.length} unit...`, 'info');
 
     for (const serial of serials) {
-      setDeviceProgress(serial, 20, 'Opening modem port');
-      addLog(serial, 'CMD', `Probing modem interface for AT+ENGMODES setup`);
+      setDeviceProgress(serial, 25, 'Probing Modem');
+      addLog(serial, 'CMD', `Opening modem COM port for TrustZone verification`);
 
       try {
-        setDeviceProgress(serial, 50, 'Injecting AT+ENGMODES');
-        addLog(serial, 'CMD', `AT+ENGMODES=1,1,0 (Modes: [${modes.join(',')}])`);
+        setDeviceProgress(serial, 65, 'AT+ENGMODES=9,0');
+        addLog(serial, 'CMD', `AT+ENGMODES=9,0 (Direct SE Query)`);
 
-        const baseUrl = getNodeBaseUrl(serial);
-        const res = await fetch(`${baseUrl}/devices/${encodeURIComponent(serial)}/install`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ modes })
-        });
-
-        if (res.ok) {
-          const data = await res.json().catch(() => ({}));
-          setDeviceProgress(serial, 85, 'Verifying mode token');
-          addLog(serial, 'INFO', `AT command acknowledged. Querying AT+ENGMODES=9,0`);
-          setDeviceProgress(serial, 100, 'Installed OK');
-          addLog(serial, 'INFO', data.message || `Instalasi mode selesai pada ${serial}`);
-          showToast(`Berhasil di ${serial}: ${data.message || 'Installed OK'}`, 'info');
+        let data = null;
+        if (window.__TAURI__) {
+          data = await tauriInvoke('execute_operation', { operation: 'QUERY', serial });
         } else {
-          const err = await res.json().catch(() => ({}));
-          setDeviceProgress(serial, 100, 'Failed');
-          const errCode = err.error_code ? ` [${err.error_code}]` : '';
-          addLog(serial, 'ERROR', `Instalasi gagal${errCode}: ${err.message || 'Command rejected'}`);
-          showToast(`Gagal di ${serial}: ${err.message || 'Error'}`, 'error');
+          const baseUrl = getNodeBaseUrl(serial);
+          const res = await fetch(`${baseUrl}/devices/${encodeURIComponent(serial)}/query`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          if (res.ok) {
+            data = await res.json().catch(() => ({}));
+          }
+        }
+
+        if (data && data.status !== 'FAILED') {
+          setDeviceProgress(serial, 100, 'Checked OK');
+          addLog(serial, 'INFO', data.message || `Status token terverifikasi di hardware`);
+          showToast(`Selesai di ${serial}: ${data.message || 'Checked OK'}`, 'info');
+        } else {
+          setDeviceProgress(serial, 100, 'No Token');
+          addLog(serial, 'WARN', data ? data.message : 'Gagal membaca status modem');
         }
       } catch (e) {
-        setDeviceProgress(serial, 100, 'Network Error');
-        addLog(serial, 'ERROR', `Gagal koneksi ke daemon saat instalasi: ${e.message}`);
-        console.error('Install request failed:', e);
+        setDeviceProgress(serial, 100, 'Error');
+        addLog(serial, 'ERROR', `Gagal koneksi saat verifikasi token: ${e.message}`);
       }
     }
 
-    setTimeout(fetchData, 800);
+    setTimeout(fetchData, 600);
   }
 
   async function removeTokenOffline(serials) {
@@ -858,7 +933,7 @@
     // Batch Actions
     if (btnBatchInstall) {
       btnBatchInstall.addEventListener('click', () => {
-        installModes(Array.from(selectedSerials));
+        queryDevices(Array.from(selectedSerials));
       });
     }
 
