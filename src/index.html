@@ -238,101 +238,36 @@
               </div>
 
               <div class="fleet-accordion-body" id="accordion-body-content">
-                <!-- Child Accordion 1: Mode Knowledge Guide -->
-                <div class="child-accordion collapsed" id="child-accordion-modes">
-                  <div class="child-accordion-header" id="btn-toggle-child-modes">
-                    <div class="child-header-left">
-                      <svg class="icon chevron-icon"><use href="#icon-chevron-down"></use></svg>
-                      <span class="child-accordion-title">Kamus Mode Engineering (EM)</span>
-                      <span class="child-accordion-badge">4 Standard Modes</span>
-                    </div>
-                  </div>
-                  <div class="child-accordion-body" id="child-modes-body">
-                    <div class="mode-card-grid">
-                      <div class="mode-card checked" data-mode="0">
-                        <div class="mode-card-info">
-                          <div class="mode-card-top">
-                            <span class="mode-index-badge badge-eng">0</span>
-                            <span class="mode-name">MODE_ENG_KERNEL</span>
-                          </div>
-                          <span class="mode-desc">Root Shell Access, Permissive SELinux, and Kernel dmesg logs</span>
-                        </div>
-                      </div>
-
-                      <div class="mode-card checked" data-mode="1">
-                        <div class="mode-card-info">
-                          <div class="mode-card-top">
-                            <span class="mode-index-badge badge-em">1</span>
-                            <span class="mode-name">MODE_INIT_EM</span>
-                          </div>
-                          <span class="mode-desc">Initialize Engineering Mode Container & Knox TrustZone token</span>
-                        </div>
-                      </div>
-
-                      <div class="mode-card checked" data-mode="12">
-                        <div class="mode-card-info">
-                          <div class="mode-card-top">
-                            <span class="mode-index-badge badge-sod">12</span>
-                            <span class="mode-name">MODE_ACCESS_SOD</span>
-                          </div>
-                          <span class="mode-desc">Secure On-Device Diagnostics: Camera, sensor, and baseband tests</span>
-                        </div>
-                      </div>
-
-                      <div class="mode-card checked" data-mode="49">
-                        <div class="mode-card-info">
-                          <div class="mode-card-top">
-                            <span class="mode-index-badge badge-dump">49</span>
-                            <span class="mode-name">MODE_EXTRACT_RAM_DUMP</span>
-                          </div>
-                          <span class="mode-desc">Physical RAM Dump Extraction directly via modem interface</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                <div class="fleet-table-container" id="fleet-table-container">
+                  <table class="fleet-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 38px; text-align: center;">
+                          <input type="checkbox" id="master-checkbox" title="Pilih semua perangkat">
+                        </th>
+                        <th style="width: 120px;">PORT / NODE</th>
+                        <th style="width: 110px;">MODEL</th>
+                        <th style="width: 130px;">SERIAL</th>
+                        <th style="width: 115px; text-align: center;">STATUS TOKEN</th>
+                        <th style="width: 90px; text-align: center;">PEMILIK</th>
+                        <th style="width: 150px;">MASA BERLAKU</th>
+                        <th style="width: 150px;">MODE AKTIF</th>
+                        <th style="width: 90px; text-align: center;">HW VERIFY</th>
+                        <th style="width: 130px; text-align: right;">AKSI</th>
+                      </tr>
+                    </thead>
+                    <tbody id="fleet-table-body">
+                      <!-- Populated via JS -->
+                    </tbody>
+                  </table>
                 </div>
 
-                <!-- Child Accordion 2: Fleet Target Devices Table -->
-                <div class="child-accordion expanded" id="child-accordion-devices">
-                  <div class="child-accordion-header" id="btn-toggle-child-devices">
-                    <div class="child-header-left">
-                      <svg class="icon chevron-icon"><use href="#icon-chevron-down"></use></svg>
-                      <span class="child-accordion-title">Daftar Perangkat & Masa Berlaku Token</span>
-                    </div>
-                  </div>
-                  <div class="child-accordion-body" id="child-devices-body">
-                    <div class="fleet-table-container" id="fleet-table-container">
-                      <table class="fleet-table">
-                        <thead>
-                          <tr>
-                            <th style="width: 38px; text-align: center;">
-                              <input type="checkbox" id="master-checkbox" title="Pilih semua perangkat">
-                            </th>
-                            <th style="width: 120px;">PORT / NODE</th>
-                            <th style="width: 110px;">MODEL</th>
-                            <th style="width: 130px;">SERIAL</th>
-                            <th style="width: 115px; text-align: center;">STATUS TOKEN</th>
-                            <th style="width: 90px; text-align: center;">PEMILIK</th>
-                            <th style="width: 150px;">MASA BERLAKU</th>
-                            <th style="width: 150px;">MODE AKTIF</th>
-                            <th style="width: 90px; text-align: center;">HW VERIFY</th>
-                            <th style="width: 130px; text-align: right;">AKSI</th>
-                          </tr>
-                        </thead>
-                        <tbody id="fleet-table-body">
-                          <!-- Populated via JS -->
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <!-- Empty State (Placed outside scroll container for full-width centering) -->
-                    <div class="empty-state" id="fleet-table-empty" style="display: none;">
-                      <svg class="empty-icon"><use href="#icon-device"></use></svg>
-                      <div class="empty-title">No Devices Detected Across Nodes</div>
-                      <div class="empty-desc">
-                        Connect Samsung devices via USB to any active MRT Station node.
-                      </div>
-                    </div>
+                <!-- Empty State (Placed outside scroll container for full-width centering) -->
+                <div class="empty-state" id="fleet-table-empty" style="display: none;">
+                  <svg class="empty-icon"><use href="#icon-device"></use></svg>
+                  <div class="empty-title">No Devices Detected Across Nodes</div>
+                  <div class="empty-desc">
+                    Connect Samsung devices via USB to any active MRT Station node.
                   </div>
                 </div>
               </div>

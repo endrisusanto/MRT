@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.2.1] - 2026-10-20
+
+fix: remove kamus accordion and update mode names (0=ENG_KERNEL, 1=SKIP_SUW, 12/49=ALLOW_GET_GA_SCREENSHORT)
+
+
 ## [v2.2.0] - 2026-10-20
 
 feat: pivot to pure token monitoring and fleet expiration sentinel

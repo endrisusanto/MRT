@@ -76,10 +76,6 @@
   const btnToggleSelectAll = document.getElementById('btn-toggle-select-all');
   const iconSelectState = document.getElementById('icon-select-state');
   const labelSelectState = document.getElementById('label-select-state');
-  const btnToggleChildModes = document.getElementById('btn-toggle-child-modes');
-  const accordionChildModes = document.getElementById('child-accordion-modes');
-  const btnToggleChildDevices = document.getElementById('btn-toggle-child-devices');
-  const accordionChildDevices = document.getElementById('child-accordion-devices');
   const btnBatchInstall = document.getElementById('btn-batch-install');
   const btnBatchRemove = document.getElementById('btn-batch-remove');
   const masterCheckbox = document.getElementById('master-checkbox');
@@ -546,10 +542,15 @@
       // Active mode badges (only displayed if confirmed active in TrustZone)
       const activeModes = isTokenActive ? (d.active_modes || []) : [];
       const badges = [];
-      if (activeModes.some(m => m.includes('ENG_KERNEL'))) badges.push('<span class="mini-mode-badge badge-eng">ENG</span>');
-      if (activeModes.some(m => m.includes('INIT_EM'))) badges.push('<span class="mini-mode-badge badge-em">EM</span>');
-      if (activeModes.some(m => m.includes('ACCESS_SOD'))) badges.push('<span class="mini-mode-badge badge-sod">SOD</span>');
-      if (activeModes.some(m => m.includes('RAM_DUMP'))) badges.push('<span class="mini-mode-badge badge-dump">DUMP</span>');
+      if (activeModes.some(m => m.includes('ENG_KERNEL'))) {
+        badges.push('<span class="mini-mode-badge badge-eng" title="MODE_ENG_KERNEL (0)">ENG</span>');
+      }
+      if (activeModes.some(m => m.includes('SKIP_SUW') || m.includes('INIT_EM'))) {
+        badges.push('<span class="mini-mode-badge badge-em" title="MODE_SKIP_SUW (1)">SUW</span>');
+      }
+      if (activeModes.some(m => m.includes('SCREENSHORT') || m.includes('SCREENSHOT') || m.includes('ACCESS_SOD') || m.includes('RAM_DUMP'))) {
+        badges.push('<span class="mini-mode-badge badge-sod" title="MODE_ALLOW_GET_GA_SCREENSHORT (12/49)">GA_SS</span>');
+      }
       const modesHtml = badges.length > 0 ? badges.join('') : '<span style="color:var(--color-text-muted);font-size:10px;">None</span>';
 
       // HW Verification badge (Solid: HW OK or UNVERIFIED, no cache)
@@ -913,23 +914,6 @@
       });
     }
 
-    // Child Accordions Toggle Listeners
-    if (btnToggleChildModes && accordionChildModes) {
-      btnToggleChildModes.addEventListener('click', (e) => {
-        e.stopPropagation();
-        accordionChildModes.classList.toggle('expanded');
-        accordionChildModes.classList.toggle('collapsed');
-      });
-    }
-
-    if (btnToggleChildDevices && accordionChildDevices) {
-      btnToggleChildDevices.addEventListener('click', (e) => {
-        e.stopPropagation();
-        accordionChildDevices.classList.toggle('expanded');
-        accordionChildDevices.classList.toggle('collapsed');
-      });
-    }
-
     // Batch Actions
     if (btnBatchInstall) {
       btnBatchInstall.addEventListener('click', () => {
@@ -942,21 +926,6 @@
         removeTokenOffline(Array.from(selectedSerials));
       });
     }
-
-    // Mode Checklist Toggles
-    document.querySelectorAll('.mode-checkbox').forEach(cb => {
-      cb.addEventListener('change', (e) => {
-        const modeVal = parseInt(e.target.value, 10);
-        const card = e.target.closest('.mode-card');
-        if (e.target.checked) {
-          selectedModes.add(modeVal);
-          if (card) card.classList.add('checked');
-        } else {
-          selectedModes.delete(modeVal);
-          if (card) card.classList.remove('checked');
-        }
-      });
-    });
 
     // Filters
     if (inputSearch) {

@@ -3,6 +3,11 @@ use std::io::{Read, Write};
 use std::time::Duration;
 
 pub const MODE_ENG_KERNEL: i32 = 0;
+pub const MODE_SKIP_SUW: i32 = 1;
+pub const MODE_ALLOW_GET_GA_SCREENSHORT: i32 = 12;
+pub const MODE_ALLOW_GET_GA_SCREENSHORT_49: i32 = 49;
+
+// Legacy aliases for backward compatibility
 pub const MODE_INIT_EM: i32 = 1;
 pub const MODE_ACCESS_SOD: i32 = 12;
 pub const MODE_EXTRACT_RAM_DUMP: i32 = 49;
@@ -10,9 +15,8 @@ pub const MODE_EXTRACT_RAM_DUMP: i32 = 49;
 pub fn mode_index_to_name(index: i32) -> &'static str {
     match index {
         MODE_ENG_KERNEL => "MODE_ENG_KERNEL",
-        MODE_INIT_EM => "MODE_INIT_EM",
-        MODE_ACCESS_SOD => "MODE_ACCESS_SOD",
-        MODE_EXTRACT_RAM_DUMP => "MODE_EXTRACT_RAM_DUMP",
+        MODE_SKIP_SUW => "MODE_SKIP_SUW",
+        MODE_ALLOW_GET_GA_SCREENSHORT | MODE_ALLOW_GET_GA_SCREENSHORT_49 => "MODE_ALLOW_GET_GA_SCREENSHORT",
         _ => "MODE_UNKNOWN",
     }
 }
@@ -20,9 +24,12 @@ pub fn mode_index_to_name(index: i32) -> &'static str {
 pub fn mode_name_to_index(name: &str) -> Option<i32> {
     match name {
         "MODE_ENG_KERNEL" | "ENG_KERNEL" => Some(MODE_ENG_KERNEL),
-        "MODE_INIT_EM" | "INIT_EM" => Some(MODE_INIT_EM),
-        "MODE_ACCESS_SOD" | "ACCESS_SOD" => Some(MODE_ACCESS_SOD),
-        "MODE_EXTRACT_RAM_DUMP" | "RAM_DUMP" => Some(MODE_EXTRACT_RAM_DUMP),
+        "MODE_SKIP_SUW" | "SKIP_SUW" | "MODE_INIT_EM" | "INIT_EM" => Some(MODE_SKIP_SUW),
+        "MODE_ACCESS_SOD" | "ACCESS_SOD" => Some(MODE_ALLOW_GET_GA_SCREENSHORT),
+        "MODE_EXTRACT_RAM_DUMP" | "RAM_DUMP" => Some(MODE_ALLOW_GET_GA_SCREENSHORT_49),
+        "MODE_ALLOW_GET_GA_SCREENSHORT" | "ALLOW_GET_GA_SCREENSHORT"
+        | "MODE_ALLOW_GET_GA_SCREENSHOT" | "ALLOW_GET_GA_SCREENSHOT"
+        | "GA_SCREENSHORT" | "GA_SCREENSHOT" => Some(MODE_ALLOW_GET_GA_SCREENSHORT),
         _ => None,
     }
 }
@@ -191,7 +198,7 @@ pub fn register_installed_token(
 
     let modes = match selected_modes {
         Some(m) if !m.is_empty() => m,
-        _ => vec![MODE_ENG_KERNEL, MODE_INIT_EM, MODE_ACCESS_SOD, MODE_EXTRACT_RAM_DUMP],
+        _ => vec![MODE_ENG_KERNEL, MODE_SKIP_SUW, MODE_ALLOW_GET_GA_SCREENSHORT, MODE_ALLOW_GET_GA_SCREENSHORT_49],
     };
 
     let mut active_modes = Vec::new();
@@ -203,9 +210,9 @@ pub fn register_installed_token(
             active_modes.push(name.to_string());
             let tuc = match idx {
                 MODE_ENG_KERNEL => 10,
-                MODE_ACCESS_SOD => 100,
-                MODE_INIT_EM => 1000,
-                MODE_EXTRACT_RAM_DUMP => 1000,
+                MODE_SKIP_SUW => 1000,
+                MODE_ALLOW_GET_GA_SCREENSHORT => 100,
+                MODE_ALLOW_GET_GA_SCREENSHORT_49 => 1000,
                 _ => 100,
             };
             quotas.push(ModeQuota {

@@ -326,10 +326,9 @@
 }
 
 .fleet-accordion-body {
-  padding: 16px 18px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
 }
 
 .fleet-accordion.collapsed .fleet-accordion-body {
