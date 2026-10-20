@@ -100,18 +100,6 @@
       <line x1="12" y1="9" x2="12" y2="13"></line>
       <line x1="12" y1="17" x2="12.01" y2="17"></line>
     </symbol>
-    <symbol id="icon-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="3"></circle>
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-    </symbol>
-    <symbol id="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-      <circle cx="12" cy="12" r="3"></circle>
-    </symbol>
-    <symbol id="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-      <line x1="1" y1="1" x2="23" y2="23"></line>
-    </symbol>
   </svg>
 
   <div class="app-shell">
@@ -164,10 +152,6 @@
           <button id="btn-refresh" class="btn btn-secondary btn-icon-labeled" aria-label="Refresh Data" title="Reload Fleet Data">
             <svg class="icon"><use href="#icon-refresh"></use></svg>
             <span class="btn-label">Reload</span>
-          </button>
-          <button id="btn-settings" class="btn btn-secondary btn-icon-labeled" aria-label="Open Settings" title="Pengaturan Station & Relay">
-            <svg class="icon"><use href="#icon-settings"></use></svg>
-            <span class="btn-label">Settings</span>
           </button>
           <button id="btn-theme-toggle" class="btn-icon" aria-label="Toggle Color Theme" title="Toggle theme">
             <svg id="theme-icon-dark" class="icon"><use href="#icon-sun"></use></svg>
@@ -342,122 +326,6 @@
         </div>
       </div>
     </div>
-  </div>
-
-  <!-- Settings Drawer: Station Mode, Relay Agent, and Samsung Intranet Auto-Login -->
-  <div class="drawer-backdrop" id="settings-backdrop">
-    <div class="drawer-panel settings-drawer" id="settings-panel">
-      <div class="drawer-header">
-        <div class="drawer-header-left">
-          <div class="drawer-logo-circle" style="width: 28px; height: 28px; background: #ffffff; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; padding: 4px; box-sizing: border-box; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.25);">
-            <svg class="icon" style="color: #0d1117;"><use href="#icon-settings"></use></svg>
-          </div>
-          <div>
-            <div class="drawer-title">Pengaturan Station & Relay</div>
-            <div class="drawer-subtitle">Konfigurasi Relay Agent dan Auto-Login Samsung SSO</div>
-          </div>
-        </div>
-        <button id="btn-close-settings" class="btn btn-icon" title="Tutup Pengaturan" aria-label="Tutup Pengaturan">
-          <svg class="icon"><use href="#icon-x"></use></svg>
-        </button>
-      </div>
-
-      <div class="drawer-content settings-content">
-        <!-- Group 1: Mode Operasi -->
-        <div class="settings-group">
-          <div class="settings-group-title">Mode Operasi Station</div>
-          <div class="settings-field">
-            <label class="settings-label" for="setting-station-mode">Peran Instance Ini</label>
-            <select id="setting-station-mode" class="filter-select settings-select">
-              <option value="station">Workstation Klien (Request Token via Central Hub)</option>
-              <option value="relay">Workstation + Relay Server (Terhubung ke KMS Intranet)</option>
-            </select>
-            <span class="settings-hint">Routing token otomatis melalui Central Hub (mrt.endrisusanto.my.id) tanpa perlu konfigurasi IP manual</span>
-          </div>
-        </div>
-
-        <!-- Group 2: Samsung Intranet Auto-Login -->
-        <div class="settings-group">
-          <div class="settings-group-title">Samsung Intranet Auto-Login (KMS)</div>
-          
-          <div class="settings-field">
-            <label class="settings-label" for="setting-kms-endpoint">KMS Gateway Endpoint</label>
-            <input
-              type="text"
-              id="setting-kms-endpoint"
-              class="settings-input"
-              placeholder="https://em.sec.samsung.net/anonymous/janusplatform/"
-              spellcheck="false"
-            />
-          </div>
-
-          <div class="settings-field">
-            <label class="settings-label" for="setting-sso-username">Username / Single Sign-On ID</label>
-            <input
-              type="text"
-              id="setting-sso-username"
-              class="settings-input"
-              placeholder="Masukkan akun SSO Samsung..."
-              autocomplete="username"
-              spellcheck="false"
-            />
-          </div>
-
-          <div class="settings-field">
-            <label class="settings-label" for="setting-sso-password">Password SSO</label>
-            <div class="input-password-wrapper">
-              <input
-                type="password"
-                id="setting-sso-password"
-                class="settings-input"
-                placeholder="Masukkan kata sandi SSO..."
-                autocomplete="current-password"
-              />
-              <button type="button" id="btn-toggle-password" class="btn-password-toggle" title="Lihat/Sembunyikan Password" aria-label="Toggle password visibility">
-                <svg class="icon icon-eye"><use href="#icon-eye"></use></svg>
-                <svg class="icon icon-eye-off" style="display: none;"><use href="#icon-eye-off"></use></svg>
-              </button>
-            </div>
-          </div>
-
-          <div class="settings-checkboxes">
-            <label class="settings-checkbox-item">
-              <input type="checkbox" id="setting-auto-login" checked>
-              <span>Auto-login saat aplikasi dimulai</span>
-            </label>
-            <label class="settings-checkbox-item">
-              <input type="checkbox" id="setting-auto-refresh" checked>
-              <span>Auto-refresh sesi saat expired (keep-alive)</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Group 3: Status Sesi & Actions -->
-        <div class="settings-group">
-          <div class="settings-group-title">Status Koneksi & Sesi</div>
-          <div class="session-status-card" id="session-status-card">
-            <div class="session-status-indicator">
-              <span class="status-dot-pulse" id="session-dot"></span>
-              <span class="session-status-text" id="session-status-text">Belum Terhubung</span>
-            </div>
-            <span class="session-status-detail" id="session-status-detail">Kredensial disimpan lokal secara aman</span>
-          </div>
-
-          <div class="settings-actions">
-            <button id="btn-test-login" class="btn btn-secondary">
-              <svg class="icon"><use href="#icon-refresh"></use></svg>
-              <span>Test Login</span>
-            </button>
-            <button id="btn-save-settings" class="btn btn-primary">
-              <svg class="icon"><use href="#icon-check"></use></svg>
-              <span>Simpan Pengaturan</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <script src="main.js"></script>
 </body>
 </html>

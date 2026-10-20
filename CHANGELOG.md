@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.2.2] - 2026-10-20
+
+chore(release): bump version and publish artifacts
+
+
 ## [v2.2.1] - 2026-10-20
 
 fix: remove kamus accordion and update mode names (0=ENG_KERNEL, 1=SKIP_SUW, 12/49=ALLOW_GET_GA_SCREENSHORT)
